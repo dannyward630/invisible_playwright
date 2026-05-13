@@ -11,8 +11,6 @@ A patched Firefox **100% Playwright-compatible** that passes the hardest browser
 
 ## Results
 
-These are the "best" outcomes observed across independent runs on residential proxies. 
-
 ### Google reCAPTCHA v3 - **0.90 / 1.0**
 
 Top-tier score. Google classifies the session as "very likely a human". Most anti-detect stacks plateau around 0.3-0.7.
