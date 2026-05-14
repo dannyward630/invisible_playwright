@@ -4,9 +4,9 @@ These tests verify that the fingerprint sampler, Profile dataclass, prefs
 translation and proxy translation compose correctly. They do NOT launch
 Firefox. Browser-lifecycle tests live in ``test_e2e.py``.
 
-Scope (per implementation directive): Windows and platform-agnostic only.
-Linux-specific paths (e.g. Xvfb workarounds, GPU spoof on Linux) are
-intentionally covered by their unit tests, not duplicated here.
+Scope: Windows, Linux, and platform-agnostic. Platform-specific tests
+monkeypatch ``sys.platform`` so the same suite exercises both branches
+regardless of the host OS.
 """
 from __future__ import annotations
 
@@ -292,3 +292,81 @@ def test_windows_virtual_display_with_socks_proxy(monkeypatch):
     assert prefs["network.proxy.socks"] == "127.0.0.1"
     # Windows still has the renderer cleared.
     assert prefs["zoom.stealth.webgl.renderer"] == ""
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  IT11 (extra): Linux-specific pipeline — Xvfb workarounds + GPU spoof
+#  + SOCKS5 proxy. The Linux equivalent of IT10. Verifies that the three
+#  Linux-only branches (renderer spoof, Xvfb webrender disable, MSAA
+#  from profile) coexist with proxy mutation in the same prefs dict.
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.integration
+def test_linux_xvfb_workarounds_with_socks_proxy(monkeypatch):
+    """IT11 — Linux + SOCKS5 proxy: Xvfb workarounds applied, GPU renderer
+    spoofed from profile, SOCKS keys written. virtual_display is a Windows-
+    only concept so we omit it here; passing ``virtual_display=True`` on
+    Linux must NOT set ``security.sandbox.gpu.level`` (covered by VD3)."""
+    monkeypatch.setattr(sys, "platform", "linux")
+    profile = generate_profile(seed=42)
+    prefs = translate_profile_to_prefs(profile, virtual_display=True)
+    pw_proxy = configure_proxy(
+        {"server": "socks5://127.0.0.1:1080"}, prefs
+    )
+
+    assert pw_proxy is None
+    # Xvfb workarounds present.
+    assert prefs["gfx.webrender.all"] is False
+    assert prefs["gfx.webrender.force-disabled"] is True
+    assert prefs["webgl.force-enabled"] is True
+    # Windows-only sandbox key absent on Linux even with virtual_display=True.
+    assert "security.sandbox.gpu.level" not in prefs
+    # GPU renderer is spoofed from the profile (not cleared like on Windows).
+    assert prefs["zoom.stealth.webgl.renderer"] == profile.gpu.renderer
+    assert prefs["zoom.stealth.webgl.renderer"]  # non-empty
+    # SOCKS branch wrote its keys without clobbering the Linux prefs above.
+    assert prefs["network.proxy.type"] == 1
+    assert prefs["network.proxy.socks"] == "127.0.0.1"
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  IT12 (extra): Linux pipeline carries profile MSAA end-to-end. Windows
+#  pins MSAA to 4 regardless of the profile; Linux must let the sampled
+#  value through. Guards the platform branch in ``translate_profile_to_prefs``.
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.integration
+def test_linux_msaa_pin_propagates_through_pipeline(monkeypatch):
+    """IT12 — pinning MSAA on Linux survives the prefs translation; on
+    Windows the same pin is overwritten to 4 (covered by the unit tests)."""
+    monkeypatch.setattr(sys, "platform", "linux")
+    profile = generate_profile(seed=42, pin={"webgl.msaa_samples": 8})
+    prefs = translate_profile_to_prefs(profile)
+
+    assert prefs["zoom.stealth.webgl.msaa"] == 8
+    assert prefs["webgl.msaa-samples"] == 8
+    assert prefs["webgl.msaa-force"] is True
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  IT13 (extra): Linux font metrics receive the GTK/DejaVu compensation
+#  block. End-to-end check that ``_LINUX_GENERIC_FONT_FACTORS`` is
+#  prepended to the per-font metrics string sampled from the profile.
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.integration
+def test_linux_font_metrics_include_generic_factors(monkeypatch):
+    """IT13 — on Linux the font metrics pref starts with the generic
+    width-scale factors (GTK/DejaVu compensation) so glyph widths match
+    Windows. Without this, Linux sessions leak via metric drift."""
+    from invisible_playwright.prefs import _LINUX_GENERIC_FONT_FACTORS
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    profile = generate_profile(seed=42)
+    prefs = translate_profile_to_prefs(profile)
+
+    metrics = prefs["zoom.stealth.font.metrics"]
+    assert metrics.startswith(_LINUX_GENERIC_FONT_FACTORS)
