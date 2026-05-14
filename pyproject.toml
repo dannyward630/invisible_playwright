@@ -43,3 +43,10 @@ packages = ["src/invisible_playwright"]
 [tool.hatch.build.targets.wheel.force-include]
 "src/invisible_playwright/data" = "invisible_playwright/data"
 "src/invisible_playwright/_fpforge/data" = "invisible_playwright/_fpforge/data"
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: pure-logic tests, no I/O or external deps",
+    "integration: multi-module tests, no browser",
+    "e2e: requires patched Firefox binary and display",
+]

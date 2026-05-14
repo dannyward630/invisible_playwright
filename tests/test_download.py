@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 import responses
 
-from invisible_playwright.download import ensure_binary
 from invisible_playwright.constants import BINARY_VERSION
+from invisible_playwright.download import ensure_binary
 
 
 def _make_zip(path: Path, inner_name: str, payload: bytes) -> bytes:
@@ -19,6 +19,7 @@ def _make_zip(path: Path, inner_name: str, payload: bytes) -> bytes:
     return data
 
 
+@pytest.mark.unit
 @responses.activate
 def test_ensure_binary_downloads_and_verifies(tmp_path, monkeypatch):
     """Full path: cache miss -> HTTP GET -> SHA256 check -> extract -> return path."""
@@ -48,6 +49,7 @@ def test_ensure_binary_downloads_and_verifies(tmp_path, monkeypatch):
     assert Path(path).name == "firefox.exe"
 
 
+@pytest.mark.unit
 @responses.activate
 def test_ensure_binary_rejects_sha_mismatch(tmp_path, monkeypatch):
     cache = tmp_path / "cache"
