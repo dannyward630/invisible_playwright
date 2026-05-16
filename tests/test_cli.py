@@ -4,16 +4,16 @@ import sys
 
 def test_version_subcommand():
     r = subprocess.run(
-        [sys.executable, "-m", "invisible-playwright", "version"],
+        [sys.executable, "-m", "invisible_playwright", "version"],
         capture_output=True, text=True, check=True,
     )
     assert "firefox-" in r.stdout
-    assert "invisible-playwright" in r.stdout.lower()
+    assert "invisible_playwright" in r.stdout.lower()
 
 
 def test_help_subcommand():
     r = subprocess.run(
-        [sys.executable, "-m", "invisible-playwright", "--help"],
+        [sys.executable, "-m", "invisible_playwright", "--help"],
         capture_output=True, text=True,
     )
     assert r.returncode == 0
