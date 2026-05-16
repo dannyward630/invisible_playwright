@@ -28,7 +28,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "pytest-mock>=3", "responses>=0.24"]
+dev = ["pytest>=7", "pytest-mock>=3", "responses>=0.24", "build>=1"]
+
+[tool.pytest.ini_options]
+markers = ["slow: tests that build the wheel — opt-in only"]
+addopts = "-m 'not slow'"
 
 [project.scripts]
 invisible-playwright = "invisible_playwright.cli:main"
@@ -40,6 +44,5 @@ Issues = "https://github.com/feder-cr/invisible_playwright/issues"
 [tool.hatch.build.targets.wheel]
 packages = ["src/invisible_playwright"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"src/invisible_playwright/data" = "invisible_playwright/data"
-"src/invisible_playwright/_fpforge/data" = "invisible_playwright/_fpforge/data"
+[tool.hatch.build.targets.sdist]
+include = ["src/invisible_playwright", "tests", "README.md", "LICENSE", "pyproject.toml"]
