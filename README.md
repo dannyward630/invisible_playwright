@@ -105,7 +105,7 @@ Competitor scores reflect our own testing on Windows 10 against the same five de
 ## Install
 
 ```bash
-pip install invisible-playwright
+pip install git+https://github.com/feder-cr/invisible_playwright.git
 python -m invisible_playwright fetch      # one-time ~100 MB download, SHA256-verified
 ```
 
