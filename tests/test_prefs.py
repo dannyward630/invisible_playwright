@@ -1,7 +1,16 @@
+import sys
+
+import pytest
+
 from invisible_playwright._fpforge import generate_profile
 from invisible_playwright.prefs import translate_profile_to_prefs
 
 
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"),
+    reason="Renderer is only spoofed via pref on Linux; on Windows the native ANGLE "
+           "string is preserved to keep the WebGL parameters hash coherent",
+)
 def test_translate_includes_gpu_renderer():
     p = generate_profile(seed=42)
     prefs = translate_profile_to_prefs(p)
