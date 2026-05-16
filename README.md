@@ -31,7 +31,7 @@ No contradictions between headless hints, spoofed values, and real rendering out
 
 ### BrowserLeaks WebRTC - **no public IP leak**
 
-WebRTC srflx address is the proxy egress IP; host candidates are private LAN. The real public IP never leaks via STUN, even on pages that configure their own ICE servers. Stock Firefox leaks the real local IP via WebRTC mDNS - invisible_playwright doesn't.
+WebRTC srflx address is the proxy egress IP; host candidates are private LAN. The real public IP never leaks via STUN, even on pages that configure their own ICE servers. Stock Firefox exposes an mDNS hostname (e.g. `abc-1234.local`) as a host ICE candidate, which is itself a stable per-session signal detectors fingerprint. invisible_playwright replaces host candidates with synthetic private-LAN IPs that match the spoofed network, removing the mDNS tell.
 
 ![WebRTC no leaks](docs/screenshots/webrtc.png)
 
@@ -48,7 +48,7 @@ Every row green: WebDriver not present, Chrome-only properties absent, plugin/mi
 **Most anti-detect browsers patch Chromium at the JavaScript level** - they override `navigator`, `WebGLRenderingContext.getParameter`, canvas APIs, and so on via injected scripts. This has two fatal problems:
 
 1. **JS patches are detectable.** Anti-bots enumerate native function `.toString()`, check descriptor configurability, compare property enumeration order, watch for prototype mutations. Every patch leaves a fingerprint of its own. CreepJS has an entire battery of "lies detectors" built around this.
-2. **Chromium itself is now suspect.** Residential-proxy bot traffic is overwhelmingly Chromium-based, so detectors weight anything Chromium-shaped as risky by default. And the parts that matter (TLS stack, renderer process) are not fully open-source in Chrome proper - forks either inherit all Chromium tells or drift in visible ways.
+2. **Chromium itself is now suspect.** Residential-proxy bot traffic is overwhelmingly Chromium-based, so detectors weight anything Chromium-shaped as risky by default. Chromium-based forks inherit Chrome's open-source layers (BoringSSL, Blink, V8, ANGLE) cleanly, but they still cannot fully match Chrome in practice: Chrome ships closed-source components on top (Widevine, proprietary codecs, Google Update / Safe Browsing endpoints) that flip detectable JS feature flags and network signals, and forks lag Chrome's release cadence by days to weeks, leaving telltale version-specific behaviours that detectors lock onto.
 
 **invisible_playwright patches Firefox at the C++ level.** The spoofed values come back out through the normal Gecko paths - there is no JS shim, no override, no `Object.defineProperty`. **From the page's point of view, the browser is just telling the truth.** Anti-bot lie-detectors have nothing to latch onto.
 
@@ -81,9 +81,9 @@ Everything is driven by preferences - no hardcoded values in the binary. You cha
 
 ## How it compares
 
-Commercial anti-detect browsers (Multilogin, GoLogin, AdsPower, Kameleo, Dolphin Anty, Browserbase) ship a patched Chromium and override fingerprints at the JavaScript layer. That's the ceiling - and it's a low one.
+Commercial anti-detect browsers (Multilogin Mimic, GoLogin Orbita, AdsPower, Dolphin Anty) ship patched Chromium and apply most spoofing at the JavaScript layer. A few (Kameleo, Multilogin Stealthfox) also offer Firefox-based profiles, but the spoofing pattern is the same: runtime overrides on top of an unmodified rendering engine. That's the ceiling - and it's a low one.
 
-| | invisible_playwright | Multilogin / GoLogin | AdsPower / Dolphin | Browserbase |
+| | invisible_playwright | Multilogin / GoLogin | AdsPower / Dolphin | Kameleo |
 |---|---|---|---|---|
 | Engine | Firefox (open source) | Chromium fork | Chromium fork | Chromium |
 | Patch depth | C++ source | JS overrides | JS overrides | JS overrides |
@@ -96,6 +96,8 @@ Commercial anti-detect browsers (Multilogin, GoLogin, AdsPower, Kameleo, Dolphin
 | FP Pro - tampering | ✅ Not detected | ❌ Detected | ❌ Detected | ❌ Detected |
 | FP Pro - VPN flag | ✅ false | ❌ true | ❌ true | ❌ true |
 | CreepJS lies | ✅ 0 | ❌ multiple | ❌ multiple | ❌ multiple |
+
+Competitor scores reflect our own testing on Windows 10 against the same five detection suites used above; results may vary with their evolving builds.
 
 ---
 
