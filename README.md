@@ -55,7 +55,7 @@ Every row green: WebDriver not present, Chrome-only properties absent, plugin/mi
 
 **invisible_playwright patches Firefox at the C++ level.** The spoofed values come back out through the normal Gecko paths - there is no JS shim, no override, no `Object.defineProperty`. **From the page's point of view, the browser is just telling the truth.** Anti-bot lie-detectors have nothing to latch onto.
 
-invisible_playwright spoofs **all the layers that matter, together, coherently** — Navigator, screen, GPU/WebGL, Canvas, fonts, audio, WebRTC, timezone, DevTools detection, SOCKS5 auth, and the rest. See [feder-cr/firefox-stealth](https://github.com/feder-cr/firefox-stealth) for the full per-layer breakdown of which C++ files are patched and why.
+invisible_playwright spoofs **all the layers that matter, together, coherently** — Navigator, screen, GPU/WebGL, Canvas, fonts, audio, WebRTC, timezone, DevTools detection, SOCKS5 auth, and the rest. See [feder-cr/invisible-firefox](https://github.com/feder-cr/invisible-firefox) for the full per-layer breakdown of which C++ files are patched and why.
 
 Everything is driven by preferences - no hardcoded values in the binary. You change one pref, you change the spoofed value.
 
@@ -215,4 +215,4 @@ invisible_playwright takes a different angle than the major Firefox-hardening pr
 
 ## License
 
-MIT - see [LICENSE](LICENSE). The patched Firefox binary is distributed under the MPL-2.0 (Firefox upstream license). The C++ patches against mozilla-central that produce that binary are at [feder-cr/firefox-stealth](https://github.com/feder-cr/firefox-stealth).
+MIT - see [LICENSE](LICENSE). The patched Firefox binary is distributed under the MPL-2.0 (Firefox upstream license). The C++ patches against mozilla-central that produce that binary are at [feder-cr/invisible-firefox](https://github.com/feder-cr/invisible-firefox).

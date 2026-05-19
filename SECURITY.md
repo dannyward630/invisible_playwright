@@ -41,7 +41,7 @@ In scope:
 
 Out of scope here (report to the relevant project):
 
-- Vulnerabilities in the patched Firefox C++ source — open a private report at [feder-cr/firefox-stealth](https://github.com/feder-cr/firefox-stealth/security/advisories/new)
+- Vulnerabilities in the patched Firefox C++ source — open a private report at [feder-cr/invisible-firefox](https://github.com/feder-cr/invisible-firefox/security/advisories/new)
 - Vulnerabilities in upstream Firefox / mozilla-central — report to Mozilla per https://www.mozilla.org/security/
 - Vulnerabilities in third-party dependencies (`playwright`, `requests`, etc.) — report to those projects directly
 
