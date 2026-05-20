@@ -7,7 +7,7 @@ bugfixes don't force a multi-hour Firefox rebuild.
 from __future__ import annotations
 
 # Bump this when a new patched Firefox build is released on GitHub.
-BINARY_VERSION: str = "firefox-3"
+BINARY_VERSION: str = "firefox-4"
 
 # Underlying Firefox version (for display only; does not drive downloads).
 FIREFOX_UPSTREAM_VERSION: str = "150.0.1"
