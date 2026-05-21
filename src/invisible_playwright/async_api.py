@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import asyncio
 import secrets
+from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-from playwright.async_api import Browser, Playwright, async_playwright
+from playwright.async_api import Browser, BrowserContext, Playwright, async_playwright
 
 from ._fpforge import Profile, generate_profile
 from ._headless import make_virtual_display
@@ -49,6 +50,7 @@ class InvisiblePlaywright:
         timezone: str = "",
         extra_prefs: Optional[Dict[str, Any]] = None,
         binary_path: Optional[str] = None,
+        profile_dir: Optional[Union[str, Path]] = None,
     ) -> None:
         # See sync launcher: `zoom.stealth.fpp.hw_seed` is int32_t — clamp.
         self.seed: int = int(seed) if seed is not None else secrets.randbits(31)
@@ -61,12 +63,14 @@ class InvisiblePlaywright:
         self._timezone = timezone
         self._extra_prefs = extra_prefs
         self._binary_path = binary_path
+        self._profile_dir: Optional[Path] = Path(profile_dir) if profile_dir else None
         self._profile: Profile = generate_profile(self.seed, pin=self._pin)
         self._pw: Optional[Playwright] = None
         self._browser: Optional[Browser] = None
+        self._persistent_context: Optional[BrowserContext] = None
         self._virtual_display: Any = None
 
-    async def __aenter__(self) -> Browser:
+    async def __aenter__(self) -> Union[Browser, BrowserContext]:
         import sys as _sys
         executable = self._binary_path or ensure_binary()
         prefs = translate_profile_to_prefs(
@@ -85,6 +89,24 @@ class InvisiblePlaywright:
         env = self._build_env()
         try:
             self._pw = await async_playwright().start()
+            if self._profile_dir is not None:
+                # See sync launcher for the persistent-context rationale.
+                self._profile_dir.mkdir(parents=True, exist_ok=True)
+                # firefox-5 ships the C++ overrideTimezone IDL method (C7
+                # chiusura), so locale + timezone_id now propagate cleanly
+                # to the persistent context without hanging the launch.
+                self._persistent_context = await self._pw.firefox.launch_persistent_context(
+                    user_data_dir=str(self._profile_dir),
+                    executable_path=str(executable),
+                    headless=pw_headless,
+                    firefox_user_prefs=prefs,
+                    proxy=playwright_proxy,
+                    args=self._extra_args,
+                    env=env,
+                    **self._default_context_kwargs(),
+                )
+                _patch_new_page_sleep(self._persistent_context)
+                return self._persistent_context
             self._browser = await self._pw.firefox.launch(
                 executable_path=str(executable),
                 headless=pw_headless,
@@ -134,6 +156,12 @@ class InvisiblePlaywright:
         await self._teardown()
 
     async def _teardown(self) -> None:
+        if self._persistent_context is not None:
+            try:
+                await self._persistent_context.close()
+            except Exception:
+                pass
+            self._persistent_context = None
         if self._browser is not None:
             try:
                 await self._browser.close()

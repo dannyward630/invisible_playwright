@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-05-21
+
+### Added
+- `profile_dir=` kwarg on `InvisiblePlaywright` (sync + async). When set, the session uses `firefox.launch_persistent_context()` so cookies, localStorage, sessionStorage, extensions, cache and prefs are kept on disk between runs. `__enter__` returns a `BrowserContext` directly: `with InvisiblePlaywright(profile_dir=p) as ctx: ctx.new_page()`. Pair with a stable `seed=` to also pin the fingerprint identity across runs. First run creates the dir; subsequent runs reuse it.
+
+### Fixed
+- `launch_persistent_context(timezone_id="…")` no longer times out at 180s. Root cause: `juggler/content/main.js` calls `docShell.overrideTimezone(...)` on every navigation; the patched Firefox up to firefox-4 didn't expose that IDL method on `nsIDocShell`, so the call threw `TypeError: docShell.overrideTimezone is not a function`. On the non-persistent path the error fired *after* launch and was harmless; on the persistent path it blocked the launch handshake. `firefox-5` ships the C++ method (see `patch.md` section 19); this release removes the firefox-4 era Python workaround that was filtering `locale`/`timezone_id` out of the persistent context kwargs.
+
+### Changed
+- `BINARY_VERSION` bumped from `firefox-4` to `firefox-5`. The Python source delta is JS/Python only; the new Firefox build adds 50 lines of C++ in `docshell/base/nsIDocShell.idl` + `nsDocShell.cpp`.
+
 ## [0.1.5] - 2026-05-20
 
 ### Fixed

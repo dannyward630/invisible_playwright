@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import secrets
+from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-from playwright.sync_api import Browser, Playwright, sync_playwright
+from playwright.sync_api import Browser, BrowserContext, Playwright, sync_playwright
 
 from ._fpforge import Profile, generate_profile
 from ._headless import make_virtual_display
@@ -111,6 +112,7 @@ class InvisiblePlaywright:
         timezone: str = "",
         extra_prefs: Optional[Dict[str, Any]] = None,
         binary_path: Optional[str] = None,
+        profile_dir: Optional[Union[str, Path]] = None,
     ) -> None:
         """
         Args:
@@ -137,6 +139,15 @@ class InvisiblePlaywright:
             extra_prefs: Optional dict of Firefox prefs overlayed on top
                 of the generated profile — useful for niche tweaks
                 without monkey-patching the package.
+            profile_dir: Path to a persistent Firefox profile directory.
+                When set, the session uses ``launch_persistent_context()``
+                so cookies, localStorage, sessionStorage, extensions, cache
+                and prefs are kept on disk between runs. ``__enter__``
+                returns a ``BrowserContext`` (not a ``Browser``) — use it
+                directly: ``with InvisiblePlaywright(profile_dir=p) as ctx:
+                page = ctx.new_page()``. First run creates the dir;
+                subsequent runs reuse it. Pair with a stable ``seed=`` to
+                also pin the fingerprint identity across runs.
         """
         # Constrain to int31 — Firefox's `zoom.stealth.fpp.hw_seed` and
         # related stealth prefs are declared as ``int32_t`` in
@@ -154,12 +165,14 @@ class InvisiblePlaywright:
         self._timezone = timezone
         self._extra_prefs = extra_prefs
         self._binary_path = binary_path
+        self._profile_dir: Optional[Path] = Path(profile_dir) if profile_dir else None
         self._profile: Profile = generate_profile(self.seed, pin=self._pin)
         self._pw: Optional[Playwright] = None
         self._browser: Optional[Browser] = None
+        self._persistent_context: Optional[BrowserContext] = None
         self._virtual_display: Any = None
 
-    def __enter__(self) -> Browser:
+    def __enter__(self) -> Union[Browser, BrowserContext]:
         executable = self._binary_path or ensure_binary()
         prefs = self._build_prefs()
         playwright_proxy = _configure_proxy_shared(self._proxy, prefs)
@@ -168,6 +181,25 @@ class InvisiblePlaywright:
 
         try:
             self._pw = sync_playwright().start()
+            if self._profile_dir is not None:
+                # Persistent context — cookies / localStorage / extensions /
+                # prefs all live on disk between runs. Stealth prefs are
+                # re-injected via firefox_user_prefs on every launch (Playwright
+                # writes them to user.js, which overrides anything in
+                # prefs.js inside the persistent dir).
+                self._profile_dir.mkdir(parents=True, exist_ok=True)
+                self._persistent_context = self._pw.firefox.launch_persistent_context(
+                    user_data_dir=str(self._profile_dir),
+                    executable_path=str(executable),
+                    headless=pw_headless,
+                    firefox_user_prefs=prefs,
+                    proxy=playwright_proxy,
+                    args=self._extra_args,
+                    env=env,
+                    **self._persistent_context_kwargs(),
+                )
+                _patch_sync_new_page_sleep(self._persistent_context)
+                return self._persistent_context
             self._browser = self._pw.firefox.launch(
                 executable_path=str(executable),
                 headless=pw_headless,
@@ -184,6 +216,22 @@ class InvisiblePlaywright:
             raise
         self._patch_new_context_defaults(self._browser)
         return self._browser
+
+    def _persistent_context_kwargs(self) -> Dict[str, Any]:
+        """Context-level kwargs accepted by launch_persistent_context.
+
+        Identical to ``_default_context_kwargs``: viewport / screen / DPR /
+        color-scheme / locale / timezone_id. Up to firefox-4 we had to drop
+        locale and timezone_id because Playwright's per-realm overrides
+        called IDL methods (``docShell.languageOverride``,
+        ``docShell.overrideTimezone``) that weren't exposed by our patched
+        build, causing launch_persistent_context to hang for 180s. From
+        firefox-5 (C7 chiusura), the C++ ``overrideTimezone`` method is
+        present and ``languageOverride`` was already there, so the
+        per-realm overrides land and the persistent context starts in
+        ~20s like the non-persistent path.
+        """
+        return self._default_context_kwargs()
 
     def _patch_new_context_defaults(self, browser: Browser) -> None:
         """Wrap ``browser.new_context`` so its defaults derive from the
@@ -226,6 +274,12 @@ class InvisiblePlaywright:
         self._teardown()
 
     def _teardown(self) -> None:
+        if self._persistent_context is not None:
+            try:
+                self._persistent_context.close()
+            except Exception:
+                pass
+            self._persistent_context = None
         if self._browser is not None:
             try:
                 self._browser.close()
