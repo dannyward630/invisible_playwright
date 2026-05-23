@@ -289,13 +289,29 @@ _BASELINE: Dict[str, Any] = {
     "network.dns.echconfig.enabled":                      False,
     "network.dns.use_https_rr_as_altsvc":                 False,
 
-    # === A/B VARIANT B: Fission disabled ===
-    # Force single content-process model (e10s only, no BC outer/inner split).
-    # Diagnostic for the FF150 BC-swap theory: if peet_ws/fppro/sannysoft
-    # work with this off, the Juggler FF146 baseline breaks specifically on
-    # cross-process navigation tracking.
+    # === Fission / site-isolation disabled (FF146 Playwright parity) ===
+    # Force a single content-process model. Three knobs are required in FF150:
+    # upstream Playwright Firefox (FF146-based) only needed fission.autostart=False
+    # because FF146's default isolation strategy was looser. FF150 ships with
+    # fission.webContentIsolationStrategy=1 (IsolateEverything) which still
+    # site-isolates cross-origin iframes into separate `webIsolated` content
+    # processes EVEN WHEN fission.autostart is False. From the parent process's
+    # point of view, those iframes get a Juggler Frame placeholder with no
+    # docShell, no URL, and an execution context that wraps the wrong global,
+    # so frame.evaluate() fails with cross-origin SOP errors and
+    # element_handle.content_frame() returns None.
+    #
+    # Pinning the strategy to 0 keeps every cross-origin web iframe in the
+    # parent's content process, where the Juggler code paths from the FF146
+    # era expect them. processCount.webIsolated=1 is kept as belt-and-suspenders
+    # in case some path still classifies an origin as webIsolated despite the
+    # strategy change. It costs nothing to leave.
+    #
+    # See issue #20 + tests/test_cross_origin_iframe.py for the regression
+    # sentinel that catches a future A/B flipping these back.
     "fission.autostart":                                  False,
     "fission.autostart.session":                          False,
+    "fission.webContentIsolationStrategy":                0,  # IsolateNothing
     "dom.ipc.processCount.webIsolated":                   1,
 
 
@@ -385,19 +401,19 @@ _WIN_VIRT_DESKTOP_WORKAROUNDS: Dict[str, Any] = {
     # restores hardware compositor + functional WebGL on alt desktops.
     "security.sandbox.gpu.level": 0,
     # Same root cause as above, content process side. Wrapper repo issue #18
-    # (id.sky.com tab crash). Sandbox content level > 4 puts content processes
-    # on the sandbox's own kAlternateWinstation (see
-    # security/sandbox/win/src/sandboxbroker/sandboxBroker.cpp line 1113-1114:
+    # (tab crash on cross-process navigation under headless=True). Sandbox
+    # content level > 4 puts content processes on the sandbox's own
+    # kAlternateWinstation (see security/sandbox/win/src/sandboxbroker/
+    # sandboxBroker.cpp line 1113-1114:
     # `if (aSandboxLevel > 4) config->SetDesktop(kAlternateWinstation)`).
     # Combined with our CreateDesktop alt-desktop, that puts browser process
     # and content processes on DIFFERENT desktops. Cross-process navigation
-    # (Adobe AppMeasurement → new origin → new content process on a new
-    # desktop) then fails window parenting between parent and child → content
+    # then fails window parenting between parent and child, the content
     # process exits cleanly (exitCode=0, signal=null) and Playwright fires
     # page.on('crash') ~10s after page load. Lowering content sandbox to 4
     # keeps content processes on the same desktop as the browser process,
-    # which is what we want here (and is still tight enough — level 4
-    # blocks file/registry write, network calls, hardware access).
+    # which is what we want here (still tight enough — level 4 blocks
+    # file/registry write, network calls, hardware access).
     "security.sandbox.content.level": 4,
 }
 

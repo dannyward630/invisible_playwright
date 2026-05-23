@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-05-23
+
+### Fixed
+- [#20](https://github.com/feder-cr/invisible_playwright/issues/20): cross-origin iframes were unreachable from Playwright. `element_handle.content_frame()` returned `None`, `frame.evaluate()` threw cross-origin SOP errors, and `frame_locator(...).click()` timed out even with `force=True`. Root cause: FF150 defaults `fission.webContentIsolationStrategy=1` (`IsolateEverything`), which site-isolates every cross-origin iframe into a separate `webIsolated` content process even when `fission.autostart=False`. The parent's Juggler FrameTree then has a Frame placeholder with no docShell and no URL — every protocol op that needs to enter the iframe fails. Fix: pin `fission.webContentIsolationStrategy=0` (`IsolateNothing`) in the baseline prefs. The setting can be flipped back per session via `extra_prefs={"fission.webContentIsolationStrategy": 1}`.
+
+### Added
+- `tests/test_cross_origin_iframe.py`: 4 unit + 5 e2e regression sentinels for cross-origin iframe interaction. The e2e layer runs entirely offline against two local HTTP servers on `127.0.0.1` (two ports = two SOP origins) and covers `page.frames` URL tracking, `content_frame()`, `frame.evaluate()`, `frame_locator(...).locator(...)`, and end-to-end `dispatch_event("click")` for plain, sandboxed and titled iframes. A future FF upgrade or fingerprint A/B that flips the pref back to `1` will fail the suite before shipping.
+
+### Unchanged
+- `BINARY_VERSION` stays at `firefox-7`. Python-only release; no new Firefox build was needed.
+
 ## [0.1.7] - 2026-05-21
 
 ### Fixed
