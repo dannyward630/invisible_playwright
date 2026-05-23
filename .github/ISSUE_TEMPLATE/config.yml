@@ -3,9 +3,9 @@ contact_links:
   - name: Security vulnerability
     url: https://github.com/feder-cr/invisible_playwright/security/advisories/new
     about: Report a security issue privately. Do NOT open a public issue.
-  - name: Bug in the patched Firefox itself (canvas / WebGL / fonts / WebRTC / etc.)
-    url: https://github.com/feder-cr/firefox-stealth/issues
-    about: Spoofing/fingerprint bugs belong in the firefox-stealth repo.
+  - name: Bug in the patched Firefox source (C++, IDL, Juggler JS)
+    url: https://github.com/feder-cr/invisible-firefox/issues
+    about: Source-level patches in the Firefox fork go in the invisible-firefox repo. Detection results (FpJS, CreepJS, etc.) use the stealth detection template here.
   - name: Question or general discussion
     url: https://github.com/feder-cr/invisible_playwright/discussions
-    about: For usage questions, ideas, and chat. Bugs and features still go in issues.
+    about: Usage questions, ideas, chat. Bugs and features still go in issues.
