@@ -6,30 +6,39 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to file a bug report.
+        Thanks for filing a bug report.
 
-        Before continuing, please:
+        **Read first:** every field below is required unless explicitly marked optional.
+        Vague reports waste both your time and ours. Bugs reproducible on a vanilla
+        `playwright.firefox.launch()` are upstream Playwright / site-behavior issues —
+        please test that too before submitting (one of the required fields).
+
         - Search [existing issues](https://github.com/feder-cr/invisible_playwright/issues?q=is%3Aissue) to avoid duplicates.
-        - If the bug is in the **patched Firefox itself** (canvas/WebGL/audio/font spoofing, a detector flagging the browser), open it at [feder-cr/firefox-stealth](https://github.com/feder-cr/firefox-stealth/issues) instead.
-        - **Do not** report security vulnerabilities here — follow [SECURITY.md](https://github.com/feder-cr/invisible_playwright/blob/main/SECURITY.md).
+        - Stealth detection / fingerprint surface bugs go to [feder-cr/invisible-firefox](https://github.com/feder-cr/invisible-firefox/issues).
+        - Security vulnerabilities: see [SECURITY.md](https://github.com/feder-cr/invisible_playwright/blob/main/SECURITY.md).
+
+  # ─── ENV ──────────────────────────────────────────────────
   - type: input
     id: version
     attributes:
       label: invisible_playwright version
-      description: Output of `invisible_playwright version`
-      placeholder: "0.1.0 (binary 150.0.1)"
+      description: Output of `python -m invisible_playwright version`. Include both wrapper version AND binary tag.
+      placeholder: "0.1.7 (binary firefox-7 / 150.0.1)"
     validations:
       required: true
+
   - type: dropdown
     id: os
     attributes:
       label: Operating system
       options:
-        - Windows x86_64
+        - Windows 10/11 x86_64
         - Linux x86_64
-        - Other (please specify in description)
+        - macOS (unsupported — confirm if you want to try anyway)
+        - Other (specify in description)
     validations:
       required: true
+
   - type: input
     id: python
     attributes:
@@ -37,35 +46,149 @@ body:
       placeholder: "3.11.7"
     validations:
       required: true
+
+  # ─── LAUNCH CONFIG (the axis that matters for stealth bugs) ──
+  - type: dropdown
+    id: headless
+    attributes:
+      label: headless=
+      description: |
+        Critical — many bugs only repro on `headless=True` on Windows
+        (we run Firefox headed on a hidden alt-desktop via CreateDesktop in that case).
+      options:
+        - "True"
+        - "False"
+        - "Not applicable (no browser launch involved)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: proxy
+    attributes:
+      label: Proxy
+      description: Sites often behave differently by IP geo (e.g. UK shows GDPR consent that US doesn't). Tell us what proxy region you used. REDACT credentials.
+      options:
+        - "No proxy (direct host network)"
+        - "Residential proxy — UK/GB"
+        - "Residential proxy — US"
+        - "Residential proxy — other country (specify in description)"
+        - "Datacenter proxy (specify provider in description)"
+        - "SOCKS5"
+        - "HTTP(S)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: profile
+    attributes:
+      label: Profile directory
+      description: Whether you used a persistent profile (`profile_dir=...`) or a fresh one each run.
+      options:
+        - "Fresh profile each run (default — no profile_dir set)"
+        - "Persistent profile_dir (reused across runs)"
+        - "Persistent profile_dir, first time creating it"
+    validations:
+      required: true
+
+  # ─── REPRODUCTION ─────────────────────────────────────────
+  - type: input
+    id: url
+    attributes:
+      label: Exact URL that triggers the bug
+      description: The full URL string. Not "the homepage" — the literal URL you passed to `page.goto()`.
+      placeholder: "https://id.sky.com/"
+    validations:
+      required: true
+
   - type: textarea
     id: repro
     attributes:
-      label: Minimal reproduction
-      description: A small, self-contained code snippet that triggers the bug. Strip out anything unrelated.
+      label: Minimal runnable reproduction
+      description: |
+        A self-contained Python snippet that, when run, triggers the bug. We must be able to
+        copy-paste it and run. Stub creds with placeholders (`<EVOMI_PASSWORD>`) but keep the
+        structure complete. "just open the link" is NOT a reproduction.
+      value: |
+        from invisible_playwright import InvisiblePlaywright
+
+        with InvisiblePlaywright(
+            seed=42,
+            headless=True,    # or False — pick whatever triggers your bug
+            # proxy={"server": "...", "username": "...", "password": "<REDACTED>"},
+            # profile_dir="c:/tmp/my-profile",
+        ) as browser:
+            ctx = browser.new_context()
+            page = ctx.new_page()
+            page.goto("https://example.com/")
+            # ... the exact operation that fails:
+            # page.click("button:has-text('Accept all')")
       render: python
     validations:
       required: true
+
+  - type: input
+    id: selector
+    attributes:
+      label: Exact selector / locator (if the bug is about clicking, typing, finding an element)
+      description: |
+        The actual selector string passed to `page.locator()`, `page.click()`, `page.frame_locator()`, etc.
+        If not relevant to your bug, write "N/A".
+      placeholder: "page.frame_locator(\"iframe[id^='sp_message_iframe_']\").get_by_text('Accept all')"
+    validations:
+      required: true
+
+  # ─── OBSERVED vs EXPECTED ─────────────────────────────────
   - type: textarea
     id: expected
     attributes:
       label: Expected behavior
+      description: What should happen when the repro runs?
     validations:
       required: true
+
   - type: textarea
     id: actual
     attributes:
       label: Actual behavior
-      description: Include the full error message and traceback if any.
+      description: |
+        What actually happens? Include full Python tracebacks if any, the error message
+        string verbatim, any `page.on('crash')` event firing.
     validations:
       required: true
+
+  # ─── CONTEXT ──────────────────────────────────────────────
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot / visual evidence
+      description: |
+        Drag-and-drop a screenshot showing the bug. Especially important for UI bugs
+        (button not clickable, consent missing, layout wrong). For crash bugs, a screenshot
+        is optional but appreciated.
+    validations:
+      required: false
+
   - type: textarea
     id: logs
     attributes:
-      label: Logs / additional context
-      description: Browser console output, environment variables, proxy config (redact credentials), etc.
+      label: Browser / Playwright logs
+      description: |
+        Output of `DEBUG=pw:browser* python your_script.py 2>&1 | tail -200`. Especially
+        helpful for crashes, protocol errors, navigation failures.
+        REDACT credentials, real IPs, and personal paths before pasting.
       render: text
     validations:
       required: false
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Additional context, hypotheses, things you've already tried, related issues.
+    validations:
+      required: false
+
+  # ─── PRE-SUBMIT GATE ──────────────────────────────────────
   - type: checkboxes
     id: confirm
     attributes:
@@ -73,7 +196,9 @@ body:
       options:
         - label: I have searched existing issues and this bug has not been reported.
           required: true
-        - label: I am on the latest release.
+        - label: I am on the latest released invisible_playwright version (or explained why I'm on an older one).
           required: true
-        - label: I have removed any credentials, proxy passwords, or sensitive data from logs.
+        - label: The reproduction snippet runs end-to-end on a clean Python install (no missing imports, no truncation).
+          required: true
+        - label: I have removed credentials, proxy passwords, real IPs, and personal file paths from the snippet and logs.
           required: true
