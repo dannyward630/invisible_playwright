@@ -71,11 +71,15 @@ jobs:
               exit 1
           }
           Write-Host "Launching: $ffPath --version"
-          & $ffPath --version
-          if ($LASTEXITCODE -ne 0) {
-              Write-Error "firefox.exe --version returned $LASTEXITCODE"
-              exit $LASTEXITCODE
+          # NOTE: firefox.exe --version on Windows prints the version but may
+          # return non-zero exit code (sub-process fork quirk). Check stdout.
+          $output = & $ffPath --version 2>&1 | Out-String
+          Write-Host "Output: $output"
+          if ($output -notmatch 'Mozilla Firefox \d') {
+              Write-Error "firefox.exe --version did not print a Mozilla Firefox version. Output was: $output"
+              exit 1
           }
+          Write-Host "OK: firefox.exe runs and prints version."
 
       - name: Run reporter's exact InvisiblePlaywright snippet
         run: |
