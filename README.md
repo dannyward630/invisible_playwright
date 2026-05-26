@@ -10,9 +10,9 @@
 
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Federico%20Elia-0A66C2?logo=linkedin&logoColor=white)](https://it.linkedin.com/in/federico-elia-5199951b6)
 
-**Stealth Firefox that passes every bot detection test. Drop-in Playwright replacement, fingerprint patched at the C++ level — not a JavaScript shim.**
+**Stealth Firefox that passes every bot detection test. Drop-in Playwright replacement, fingerprint patched at the C++ level, not a JavaScript shim.**
 
-![invisible_playwright — 5/5 detection suites passed](docs/screenshots/hero.gif)
+![invisible_playwright - 5/5 detection suites passed](docs/screenshots/hero.gif)
 
 
 ## Why it's powerful
@@ -26,7 +26,7 @@
 
 **invisible_playwright patches Firefox at the C++ level.** The spoofed values come back out through the normal Gecko paths - there is no JS shim, no override, no `Object.defineProperty`. **From the page's point of view, the browser is just telling the truth.** Anti-bot lie-detectors have nothing to latch onto.
 
-invisible_playwright spoofs **all the layers that matter, together, coherently** — Navigator, screen, GPU/WebGL, Canvas, fonts, audio, WebRTC, timezone, DevTools detection, SOCKS5 auth, and the rest. See [feder-cr/invisible_firefox](https://github.com/feder-cr/invisible_firefox) for the full per-layer breakdown of which C++ files are patched and why.
+invisible_playwright spoofs **all the layers that matter, together, coherently**: Navigator, screen, GPU/WebGL, Canvas, fonts, audio, WebRTC, timezone, DevTools detection, SOCKS5 auth, and the rest. See [feder-cr/invisible_firefox](https://github.com/feder-cr/invisible_firefox) for the full per-layer breakdown of which C++ files are patched and why.
 
 Everything is driven by preferences - no hardcoded values in the binary. You change one pref, you change the spoofed value.
 
@@ -34,7 +34,7 @@ Everything is driven by preferences - no hardcoded values in the binary. You cha
 
 ## How it compares
 
-The closest peer in the source-level patching space is **Camoufox** (Firefox, open source) — same approach as ours, but in a roughly year-long maintenance gap with its base Firefox several majors behind. **CloakBrowser** ships a similar pitch for Chromium, but its binary is **closed source** (the source-level patches are not published — you only get the compiled output), and it still hits the Chromium reCAPTCHA ceiling. The commercial anti-detect browsers (**Multilogin**, **GoLogin**, AdsPower, Dolphin, Kameleo) are paid SaaS that overlay JS-layer spoofing on a patched Chromium — managed profiles are nice but raw detection bypass sits below both Camoufox and us.
+The closest peer in the source-level patching space is **Camoufox** (Firefox, open source): same approach as ours, but in a roughly year-long maintenance gap with its base Firefox several majors behind. **CloakBrowser** ships a similar pitch for Chromium, but its binary is **closed source** (the source-level patches are not published, you only get the compiled output), and it still hits the Chromium reCAPTCHA ceiling. The commercial anti-detect browsers (**Multilogin**, **GoLogin**, AdsPower, Dolphin, Kameleo) are paid SaaS that overlay JS-layer spoofing on a patched Chromium. Managed profiles are nice but raw detection bypass sits below both Camoufox and us.
 
 | | invisible_playwright | Camoufox | CloakBrowser | Multilogin | GoLogin |
 |---|---|---|---|---|---|
