@@ -44,7 +44,13 @@ def _cmd_clear_cache(_args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="invisible-playwright", description="invisible_playwright CLI")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    # Top-level `--version` / `-V` flag so `python -m invisible_playwright --version`
+    # works (Python convention), in addition to the existing `version` subcommand.
+    p.add_argument(
+        "-V", "--version", action="version",
+        version=f"invisible_playwright {__version__} (BINARY_VERSION={BINARY_VERSION}, Firefox {FIREFOX_UPSTREAM_VERSION})",
+    )
+    sub = p.add_subparsers(dest="cmd")
 
     sub.add_parser("fetch", help="download the patched Firefox binary")
     sub.add_parser("path", help="print the absolute path to the cached binary")
@@ -54,7 +60,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.cmd is None:
+        # argparse-conventional: print usage + error message to stderr, exit 2.
+        # We can't keep `required=True` on the subparsers because that breaks
+        # the top-level `--version` flag (argparse demands a subcommand even
+        # when --version is the only token). parser.error() preserves the
+        # original "no subcommand" exit semantics tests expect.
+        parser.error("a subcommand is required (try --help, --version, or one of: fetch, path, version, clear-cache)")
     dispatch = {
         "fetch": _cmd_fetch,
         "path": _cmd_path,

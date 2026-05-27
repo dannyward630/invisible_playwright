@@ -18,5 +18,13 @@ Quickstart:
 from .launcher import InvisiblePlaywright
 from .constants import BINARY_VERSION, FIREFOX_UPSTREAM_VERSION
 
-__version__ = "0.1.0"
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
+
+try:
+    __version__ = _pkg_version("invisible-playwright")
+except PackageNotFoundError:
+    # Editable / source checkout without an install record: fall back to a
+    # marker rather than risk shipping a stale hardcoded string.
+    __version__ = "0.0.0+unknown"
+
 __all__ = ["InvisiblePlaywright", "BINARY_VERSION", "FIREFOX_UPSTREAM_VERSION", "__version__"]
