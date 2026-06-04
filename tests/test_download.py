@@ -321,6 +321,8 @@ def test_ensure_binary_accepts_binary_mode_checksums(tmp_path, monkeypatch):
 
     # Force the platform branch the test mocks:
     monkeypatch.setattr("sys.platform", "win32")
+    import platform
+    monkeypatch.setattr(platform, "machine", lambda: "AMD64")
     out = ensure_binary()
     # No RuntimeError means the parser accepted the `*`-prefixed key.
     assert out.exists()

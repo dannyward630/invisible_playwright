@@ -10,6 +10,7 @@ from playwright.sync_api import Browser, BrowserContext, Playwright, sync_playwr
 from ._fpforge import Profile, generate_profile
 from ._headless import make_virtual_display
 from ._proxy import configure_proxy as _configure_proxy_shared
+from ._proxy import resolve_proxy_timezone
 from .download import ensure_binary
 from .prefs import translate_profile_to_prefs
 
@@ -135,8 +136,9 @@ class InvisiblePlaywright:
                 a float caps the motion in seconds.
             locale: BCP-47 tag (e.g. ``"en-US"``). Drives the
                 ``Accept-Language`` header and ``navigator.language``.
-            timezone: IANA timezone (e.g. ``"America/New_York"``). Empty
-                means use the host TZ.
+            timezone: IANA timezone (e.g. ``"America/New_York"``), or
+                ``"auto"`` to resolve the timezone from the configured proxy
+                before launch. Empty means use the host TZ.
             extra_prefs: Optional dict of Firefox prefs overlayed on top
                 of the generated profile — useful for niche tweaks
                 without monkey-patching the package.
@@ -163,7 +165,7 @@ class InvisiblePlaywright:
         self._extra_args = list(extra_args or [])
         self._humanize = humanize
         self._locale = locale
-        self._timezone = timezone
+        self._timezone = self._resolve_timezone(timezone, proxy)
         self._extra_prefs = extra_prefs
         self._binary_path = binary_path
         self._profile_dir: Optional[Path] = Path(profile_dir) if profile_dir else None
@@ -176,6 +178,12 @@ class InvisiblePlaywright:
         self._browser: Optional[Browser] = None
         self._persistent_context: Optional[BrowserContext] = None
         self._virtual_display: Any = None
+
+    @staticmethod
+    def _resolve_timezone(timezone: str, proxy: Optional[Dict[str, str]]) -> str:
+        if timezone == "auto":
+            return resolve_proxy_timezone(proxy)
+        return timezone
 
     def __enter__(self) -> Union[Browser, BrowserContext]:
         executable = self._binary_path or ensure_binary()
@@ -369,4 +377,3 @@ class InvisiblePlaywright:
         if self._humanize is True:
             return 1.5
         return float(self._humanize)
-

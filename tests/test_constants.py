@@ -55,6 +55,8 @@ def test_binary_basename_format():
     ("win32",  "x86_64",    "win-x86_64.zip"),       # mingw-style
     ("linux",  "x86_64",    "linux-x86_64.tar.gz"),  # standard Linux
     ("linux",  "AMD64",     "linux-x86_64.tar.gz"),  # odd but plausible
+    ("linux",  "arm64",     "linux-arm64.tar.gz"),   # Linux ARM64
+    ("linux",  "aarch64",   "linux-arm64.tar.gz"),   # Linux ARM64 alias
     ("Linux",  "x86_64",    "linux-x86_64.tar.gz"),  # case-insensitive platform
     ("WIN32",  "AMD64",     "win-x86_64.zip"),       # ALL CAPS platform
 ])
@@ -77,13 +79,10 @@ def test_archive_name_rejects_unsupported_arches(machine):
 
 @pytest.mark.unit
 @pytest.mark.parametrize("machine", ["arm64", "aarch64"])
-def test_archive_name_arm64_not_yet_supported(machine):
-    """ARM64 is a frequent request (issue #6). Until binaries exist for it,
-    ARCHIVE_NAME should hard-fail rather than silently degrade. If this test
-    starts failing because someone shipped ARM64 builds, replace it with the
-    positive case."""
-    with pytest.raises(NotImplementedError):
-        ARCHIVE_NAME("linux", machine)
+def test_archive_name_linux_arm64_supported(machine):
+    """ARM64 Linux builds use a stable archive name when release assets exist."""
+    name = ARCHIVE_NAME("linux", machine)
+    assert name.endswith("linux-arm64.tar.gz")
 
 
 @pytest.mark.unit
@@ -110,6 +109,7 @@ def test_binary_entry_rel_covers_every_supported_platform():
             f"ARCHIVE_NAME accepts {plat!r} but BINARY_ENTRY_REL has no entry "
             f"— ensure_binary() will fail late after a 110 MB download."
         )
+    ARCHIVE_NAME("linux", "arm64")  # same Linux archive layout and entry path
 
 
 @pytest.mark.unit

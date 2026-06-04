@@ -151,6 +151,24 @@ def test_default_context_includes_timezone_when_set():
 
 
 @pytest.mark.unit
+def test_timezone_auto_resolves_from_proxy(monkeypatch):
+    calls = []
+
+    def fake_resolve(proxy):
+        calls.append(proxy)
+        return "Europe/Vienna"
+
+    monkeypatch.setattr("invisible_playwright.launcher.resolve_proxy_timezone", fake_resolve)
+
+    proxy = {"server": "socks5://host:1080"}
+    ip = InvisiblePlaywright(seed=42, proxy=proxy, timezone="auto")
+
+    assert ip._timezone == "Europe/Vienna"
+    assert ip._default_context_kwargs()["timezone_id"] == "Europe/Vienna"
+    assert calls == [proxy]
+
+
+@pytest.mark.unit
 def test_default_context_omits_timezone_when_empty():
     """Default ``timezone=""`` means "let the host TZ leak through" —
     Playwright must not receive ``timezone_id`` at all in that case,

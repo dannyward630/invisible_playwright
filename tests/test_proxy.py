@@ -4,8 +4,13 @@ Decision-table coverage of every input partition: None/empty/direct,
 SOCKS4/5/default, HTTP/HTTPS, case variants, malformed, mutation contract.
 """
 import pytest
+import requests
 
-from invisible_playwright._proxy import configure_proxy
+from invisible_playwright._proxy import (
+    configure_proxy,
+    resolve_proxy_timezone,
+    _proxy_url_with_auth,
+)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -256,6 +261,90 @@ def test_socks_port_coerced_to_int():
     configure_proxy({"server": "socks5://host:443"}, prefs)
     assert prefs["network.proxy.socks_port"] == 443
     assert isinstance(prefs["network.proxy.socks_port"], int)
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  Proxy timezone auto-resolution
+# ──────────────────────────────────────────────────────────────────────
+
+
+class _FakeResponse:
+    def __init__(self, text="Europe/Vienna") -> None:
+        self.text = text
+
+    def raise_for_status(self) -> None:
+        return None
+
+
+@pytest.mark.unit
+def test_proxy_url_with_auth_percent_encodes_credentials():
+    out = _proxy_url_with_auth("socks5://host:1080", "user@example.com", "p/a:ss")
+    assert out == "socks5://user%40example.com:p%2Fa%3Ass@host:1080"
+
+
+@pytest.mark.unit
+def test_proxy_url_without_auth_returns_server_unchanged():
+    assert _proxy_url_with_auth("socks5://host:1080", "", "") == "socks5://host:1080"
+
+
+@pytest.mark.unit
+def test_resolve_proxy_timezone_routes_request_through_proxy(monkeypatch):
+    calls = []
+
+    def fake_get(url, *, proxies, timeout):
+        calls.append((url, proxies, timeout))
+        return _FakeResponse("Europe/Vienna\n")
+
+    monkeypatch.setattr("invisible_playwright._proxy.requests.get", fake_get)
+
+    timezone = resolve_proxy_timezone(
+        {"server": "socks5://host:1080", "username": "u", "password": "p"},
+        timeout=1.5,
+        endpoint="https://example.test/timezone",
+    )
+
+    assert timezone == "Europe/Vienna"
+    assert calls == [(
+        "https://example.test/timezone",
+        {
+            "http": "socks5://u:p@host:1080",
+            "https": "socks5://u:p@host:1080",
+        },
+        1.5,
+    )]
+
+
+@pytest.mark.unit
+def test_resolve_proxy_timezone_rejects_missing_proxy():
+    with pytest.raises(ValueError, match="requires a proxy"):
+        resolve_proxy_timezone(None)
+
+
+@pytest.mark.unit
+def test_resolve_proxy_timezone_rejects_direct_proxy():
+    with pytest.raises(ValueError, match="non-direct proxy"):
+        resolve_proxy_timezone({"server": "direct://"})
+
+
+@pytest.mark.unit
+def test_resolve_proxy_timezone_rejects_invalid_timezone(monkeypatch):
+    monkeypatch.setattr(
+        "invisible_playwright._proxy.requests.get",
+        lambda *args, **kwargs: _FakeResponse("not-a-zone"),
+    )
+    with pytest.raises(RuntimeError, match="invalid timezone"):
+        resolve_proxy_timezone({"server": "http://host:8080"})
+
+
+@pytest.mark.unit
+def test_resolve_proxy_timezone_wraps_request_errors(monkeypatch):
+    def fake_get(*args, **kwargs):
+        raise requests.RequestException("network down")
+
+    monkeypatch.setattr("invisible_playwright._proxy.requests.get", fake_get)
+
+    with pytest.raises(RuntimeError, match="failed to resolve proxy timezone"):
+        resolve_proxy_timezone({"server": "http://host:8080"})
 
 
 @pytest.mark.unit

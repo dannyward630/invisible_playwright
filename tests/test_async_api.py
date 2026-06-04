@@ -81,3 +81,21 @@ def test_async_default_context_kwargs_match_sync():
     a = AsyncIP(seed=42, timezone="America/New_York", locale="de-DE")
     s = SyncIP(seed=42, timezone="America/New_York", locale="de-DE")
     assert a._default_context_kwargs() == s._default_context_kwargs()
+
+
+@pytest.mark.unit
+def test_async_timezone_auto_resolves_from_proxy(monkeypatch):
+    calls = []
+
+    def fake_resolve(proxy):
+        calls.append(proxy)
+        return "Europe/Vienna"
+
+    monkeypatch.setattr("invisible_playwright.async_api.resolve_proxy_timezone", fake_resolve)
+
+    proxy = {"server": "socks5://host:1080"}
+    ip = AsyncIP(seed=42, proxy=proxy, timezone="auto")
+
+    assert ip._timezone == "Europe/Vienna"
+    assert ip._default_context_kwargs()["timezone_id"] == "Europe/Vienna"
+    assert calls == [proxy]

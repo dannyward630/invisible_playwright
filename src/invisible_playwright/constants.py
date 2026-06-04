@@ -26,6 +26,8 @@ def ARCHIVE_NAME(platform_key: str, machine: str) -> str:
     m = machine.lower()
     if m in {"amd64", "x86_64"}:
         arch = "x86_64"
+    elif pk == "linux" and m in {"arm64", "aarch64"}:
+        arch = "arm64"
     else:
         raise NotImplementedError(f"unsupported arch: {machine}")
 

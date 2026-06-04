@@ -11,6 +11,7 @@ from playwright.async_api import Browser, BrowserContext, Playwright, async_play
 from ._fpforge import Profile, generate_profile
 from ._headless import make_virtual_display
 from ._proxy import configure_proxy as _configure_proxy_shared
+from ._proxy import resolve_proxy_timezone
 from .download import ensure_binary
 from .launcher import _CHROME_H, _CHROME_W, _TASKBAR_H, _tz_env
 from .prefs import translate_profile_to_prefs
@@ -61,7 +62,7 @@ class InvisiblePlaywright:
         self._extra_args = list(extra_args or [])
         self._humanize = humanize
         self._locale = locale
-        self._timezone = timezone
+        self._timezone = self._resolve_timezone(timezone, proxy)
         self._extra_prefs = extra_prefs
         self._binary_path = binary_path
         self._profile_dir: Optional[Path] = Path(profile_dir) if profile_dir else None
@@ -72,6 +73,12 @@ class InvisiblePlaywright:
         self._browser: Optional[Browser] = None
         self._persistent_context: Optional[BrowserContext] = None
         self._virtual_display: Any = None
+
+    @staticmethod
+    def _resolve_timezone(timezone: str, proxy: Optional[Dict[str, str]]) -> str:
+        if timezone == "auto":
+            return resolve_proxy_timezone(proxy)
+        return timezone
 
     async def __aenter__(self) -> Union[Browser, BrowserContext]:
         import sys as _sys

@@ -59,7 +59,8 @@ pip install git+https://github.com/feder-cr/invisible_playwright.git
 python -m invisible_playwright fetch      # one-time ~100 MB download, SHA256-verified
 ```
 
-Supported platforms: **Windows x86_64**, **Linux x86_64**.
+Supported platforms: **Windows x86_64**, **Linux x86_64**, and **Linux arm64**
+when the matching release asset is published.
 
 ---
 
@@ -141,6 +142,28 @@ with InvisiblePlaywright(proxy=proxy) as browser:
 
 Schemes supported: `socks5`, `socks4`, `http`, `https`. Auth works on all of them (SOCKS5 via patched `nsProtocolProxyService.cpp`, HTTP/HTTPS via Playwright). DNS is routed through the proxy by default, no local leak.
 
+If your proxy exits in a different timezone than the host machine, set
+`timezone="auto"` to resolve the timezone through the proxy before Firefox
+starts:
+
+```python
+with InvisiblePlaywright(proxy=proxy, timezone="auto") as browser:
+    ...
+```
+
+This makes the generated Firefox prefs, Playwright `timezone_id`, and process
+`TZ` agree with the proxy egress region. If the lookup fails, launch fails
+early so you can choose an explicit timezone instead:
+
+```python
+with InvisiblePlaywright(proxy=proxy, timezone="Europe/Vienna") as browser:
+    ...
+```
+
+SOCKS proxy timezone lookup requires the package dependency installed with
+SOCKS support, which is included by default in this project via
+`requests[socks]`.
+
 ### Pinning specific fingerprint fields
 
 By default everything comes from `seed`. To force specific values while the rest stays seed-derived:
@@ -192,6 +215,67 @@ async with async_playwright() as p:
 > Important: pass `headless=False` to `firefox.launch()` and manage display hiding yourself (Xvfb on Linux, hidden desktop on Windows). Passing `headless=True` directly puts Firefox in true headless mode and skips the real rendering pipeline, which breaks canvas / audio / WebGL fingerprint coherence. The `InvisiblePlaywright` context manager does this translation automatically; the public helpers leave it to the caller.
 
 For everyday Python usage the `InvisiblePlaywright` context manager is still the recommended entry point.
+
+## TypeScript / Node usage
+
+There is no native TypeScript SDK yet, but Node Playwright can launch the
+patched Firefox binary directly. Install and fetch the binary with Python:
+
+```bash
+pip install git+https://github.com/feder-cr/invisible_playwright.git
+python -m invisible_playwright fetch
+python -m invisible_playwright path
+```
+
+Then pass the printed path to Playwright in TypeScript:
+
+```typescript
+import { firefox } from "playwright";
+
+const browser = await firefox.launch({
+  executablePath: "/absolute/path/from/invisible_playwright/path",
+  headless: false,
+  firefoxUserPrefs: {
+    "zoom.stealth.timezone": "America/New_York",
+    "invisible_playwright.humanize": true,
+  },
+});
+
+const page = await browser.newPage({
+  timezoneId: "America/New_York",
+  locale: "en-US",
+});
+```
+
+For coherent sampled fingerprints from TypeScript, generate prefs through the
+Python helper and pass the resulting JSON into Node:
+
+```bash
+python - <<'PY'
+import json
+from invisible_playwright import get_default_stealth_prefs
+print(json.dumps(get_default_stealth_prefs(seed=42, timezone="America/New_York")))
+PY
+```
+
+## Linux arm64 builds
+
+The wrapper resolves Linux arm64/aarch64 machines to this release asset name:
+
+```text
+firefox-150.0.1-stealth-linux-arm64.tar.gz
+```
+
+The archive should contain a runnable `firefox` entry at its root, matching the
+Linux x86_64 archive layout, and `checksums.txt` must include the arm64 asset
+SHA256. Once those release files exist, `python -m invisible_playwright fetch`
+will use them automatically on arm64 Linux.
+
+At a high level, build the patched Firefox from
+[feder-cr/invisible_firefox](https://github.com/feder-cr/invisible_firefox) on
+an arm64 Linux host or runner, package the resulting Firefox directory as the
+asset above, add it to the same `BINARY_VERSION` release, and update
+`checksums.txt`.
 
 ## Related projects
 
