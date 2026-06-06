@@ -17,7 +17,6 @@
 
 ## Why it's powerful
 
-**This is the actively maintained Firefox-based anti-detect browser in 2026.**  
 
 **Most other anti-detect browsers patch Chromium at the JavaScript level** - they override `navigator`, `WebGLRenderingContext.getParameter`, canvas APIs, and so on via injected scripts. This has two fatal problems:
 
