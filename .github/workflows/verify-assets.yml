@@ -1,0 +1,98 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# verify-assets.yml — re-runnable DRIVE GATE for an EXISTING release's assets.
+#
+# release.yml drive-gates every binary it builds. This does the same drive test
+# WITHOUT rebuilding: it downloads a release's already-published assets (works on
+# DRAFT releases too via GITHUB_TOKEN) and drives each one on its native runner.
+#
+# Use it to:
+#   • drive-test a release that was built before the in-pipeline gate existed
+#     (e.g. firefox-9, built on the old release.yml), or
+#   • re-verify any shipped release on demand (regression check).
+#
+# Same single-source-of-truth drive logic as release.yml: scripts/ci_drive_gate.py.
+# Headless, no screenshot → GPU-free. Zero proxy / zero secrets.
+# ─────────────────────────────────────────────────────────────────────────────
+name: verify-assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'release tag whose assets to drive-test (e.g. firefox-9)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  drive:
+    name: drive-${{ matrix.leg }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: linux-x86_64
+            runner: ubuntu-24.04
+            kind: linux
+            asset: firefox-150.0.1-stealth-linux-x86_64.tar.gz
+          - leg: linux-arm64
+            runner: ubuntu-24.04-arm
+            kind: linux
+            asset: firefox-150.0.1-stealth-linux-arm64.tar.gz
+          - leg: win-x86_64
+            runner: windows-latest
+            kind: win
+            asset: firefox-150.0.1-stealth-win-x86_64.zip
+          - leg: macos-arm64
+            runner: macos-15
+            kind: mac
+            asset: firefox-150.0.1-stealth-macos-arm64.tar.gz
+          - leg: macos-x86_64
+            runner: macos-15-intel
+            kind: mac
+            asset: firefox-150.0.1-stealth-macos-x86_64.tar.gz
+    steps:
+      - name: Checkout wrapper (for scripts/ci_drive_gate.py)
+        uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+      - name: Download the release asset (draft releases included)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          mkdir -p art
+          gh release download "${{ github.event.inputs.release_tag }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "${{ matrix.asset }}" \
+            --dir art
+          ls -la art/
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Install Playwright driver (no bundled browser — we override executable_path)
+        run: python -m pip install --quiet "playwright==1.55.0"
+      - name: Linux system deps for headless firefox
+        if: matrix.kind == 'linux'
+        run: sudo "$(which python)" -m playwright install-deps firefox
+      - name: Extract + locate firefox binary
+        shell: bash
+        run: |
+          set -e
+          mkdir -p ff
+          A="art/${{ matrix.asset }}"
+          case "${{ matrix.kind }}" in
+            win)   python -c "import zipfile; zipfile.ZipFile('$A').extractall('ff')"; EXE="ff/firefox.exe";;
+            linux) tar xzf "$A" -C ff; EXE="ff/firefox";;
+            mac)   tar xzf "$A" -C ff; EXE="ff/Firefox.app/Contents/MacOS/firefox";;
+          esac
+          [ -e "$EXE" ] || { echo "ERROR: firefox binary not found at $EXE"; exit 1; }
+          chmod +x "$EXE" 2>/dev/null || true
+          echo "FF_EXE=$EXE" >> "$GITHUB_ENV"
+          echo "located: $EXE"
+      - name: DRIVE GATE — Playwright launch via juggler + real page + JS roundtrip
+        shell: bash
+        run: python scripts/ci_drive_gate.py "$FF_EXE"

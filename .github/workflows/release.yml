@@ -9,11 +9,16 @@
 #           strip + sanitize + tar at ROOT, then validate_release.py as a HARD
 #           in-pipeline gate (the exact battle-tested script from the source repo).
 #   Win   → mach package; zip the CONTENTS of dist/firefox (clean tree, NOT
-#           dist/bin) so firefox.exe sits at the zip ROOT. Runtime-gated on a real
-#           windows-latest runner (headless screenshot).
+#           dist/bin) so firefox.exe sits at the zip ROOT.
 #   macOS → mach package; ad-hoc codesign the .app; PRESERVE its internal relative
 #           symlinks (a .app legitimately has them — cp -aL would break it); verify
 #           every symlink is relative+internal; tar the bundle. --version self-gate.
+#
+# DRIVE GATE (the firefox-8 catcher): after build, every binary is DRIVEN by
+# Playwright on its native runner (launch via juggler + real page + JS roundtrip,
+# headless, no screenshot → GPU-free, zero proxy). A juggler-less binary renders
+# a screenshot fine but is undrivable — only an actual drive catches that. The
+# proxy realness gate (fppro/webrtc) stays LOCAL — it needs secrets.
 #
 # Trigger: push a tag `firefox-N`, or run manually.  Hybrid runners, all free.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -233,37 +238,85 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # Windows binary is cross-built on Linux → gate it on a real Windows runner.
-  gate-windows:
-    name: gate-windows
+  # DRIVE GATE — the firefox-8 catcher. A raw `firefox --screenshot` proves
+  # nothing about automation: a juggler-less binary renders fine and ships
+  # broken (firefox-8 did exactly that). So we DRIVE every binary the way users
+  # will: Playwright launches it over the juggler pipe, loads a real page, and
+  # round-trips JS. A binary missing/broken juggler throws TargetClosedError
+  # here and the release never publishes. Headless, NO screenshot → GPU-free,
+  # so it can't false-fail on the GPU-less hosted runners. Zero proxy / zero
+  # secrets → safe in public CI (the proxy realness gate stays local, by design).
+  # Each leg runs on its NATIVE runner so we test the real artifact, not a cross
+  # surrogate. Playwright is pinned to a version validated against this build's
+  # juggler; bump it in lockstep when the juggler is re-synced from upstream.
+  gate:
+    name: gate-${{ matrix.leg }}
     needs: build
-    runs-on: windows-latest
-    timeout-minutes: 20
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: linux-x86_64
+            runner: ubuntu-24.04
+            kind: linux
+            asset: firefox-150.0.1-stealth-linux-x86_64.tar.gz
+          - leg: linux-arm64
+            runner: ubuntu-24.04-arm
+            kind: linux
+            asset: firefox-150.0.1-stealth-linux-arm64.tar.gz
+          - leg: win-x86_64
+            runner: windows-latest
+            kind: win
+            asset: firefox-150.0.1-stealth-win-x86_64.zip
+          - leg: macos-arm64
+            runner: macos-15
+            kind: mac
+            asset: firefox-150.0.1-stealth-macos-arm64.tar.gz
+          - leg: macos-x86_64
+            runner: macos-15-intel
+            kind: mac
+            asset: firefox-150.0.1-stealth-macos-x86_64.tar.gz
     steps:
-      - name: Download win asset
+      - name: Checkout wrapper (for scripts/ci_drive_gate.py)
+        uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+      - name: Download asset
         uses: actions/download-artifact@v4
-        with: { name: asset-win-x86_64, path: art }
-      - name: Extract + structure + headless render gate
-        shell: pwsh
+        with:
+          name: asset-${{ matrix.leg }}
+          path: art
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Install Playwright driver (no bundled browser — we override executable_path)
+        run: python -m pip install --quiet "playwright==1.55.0"
+      - name: Linux system deps for headless firefox
+        if: matrix.kind == 'linux'
+        run: sudo "$(which python)" -m playwright install-deps firefox
+      - name: Extract + locate firefox binary
+        shell: bash
         run: |
-          $zip = Get-ChildItem art -Filter *.zip | Select-Object -First 1
-          Expand-Archive $zip.FullName -DestinationPath ff -Force
-          foreach ($f in 'firefox.exe','application.ini','dependentlibs.list') {
-            if (-not (Test-Path (Join-Path ff $f))) { throw "missing critical file: $f" }
-          }
-          $exe = Join-Path (Resolve-Path ff) 'firefox.exe'
-          Remove-Item shot.png -ErrorAction SilentlyContinue
-          $p = Start-Process -FilePath $exe -ArgumentList '--headless','--no-remote','--profile','prof','--screenshot',"$PWD\shot.png",'https://example.com' -PassThru -NoNewWindow
-          if (-not $p.WaitForExit(90000)) { $p.Kill(); throw 'win gate TIMEOUT' }
-          Start-Sleep 1
-          if (-not (Test-Path shot.png) -or (Get-Item shot.png).Length -lt 3000) { throw 'win gate: no/empty screenshot' }
-          Write-Output "win gate OK: firefox.exe runs + renders ($((Get-Item shot.png).Length) bytes)"
-      - uses: actions/upload-artifact@v4
-        with: { name: gate-win-screenshot, path: shot.png, if-no-files-found: warn, retention-days: 7 }
+          set -e
+          mkdir -p ff
+          A="art/${{ matrix.asset }}"
+          case "${{ matrix.kind }}" in
+            win)   python -c "import zipfile; zipfile.ZipFile('$A').extractall('ff')"; EXE="ff/firefox.exe";;
+            linux) tar xzf "$A" -C ff; EXE="ff/firefox";;
+            mac)   tar xzf "$A" -C ff; EXE="ff/Firefox.app/Contents/MacOS/firefox";;
+          esac
+          [ -e "$EXE" ] || { echo "ERROR: firefox binary not found at $EXE"; exit 1; }
+          chmod +x "$EXE" 2>/dev/null || true
+          echo "FF_EXE=$EXE" >> "$GITHUB_ENV"
+          echo "located: $EXE"
+      - name: DRIVE GATE — Playwright launch via juggler + real page + JS roundtrip
+        shell: bash
+        run: python scripts/ci_drive_gate.py "$FF_EXE"
 
   publish:
     name: publish-draft-release
-    needs: [build, gate-windows]
+    needs: [build, gate]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
