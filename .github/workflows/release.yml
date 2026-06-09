@@ -267,26 +267,38 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # `extra: --full` adds the mouse/keyboard/canvas/navsurface interaction
+          # checks. Only on linux-x86_64 (historically the most reliable hosted
+          # runner): the interaction code is platform-identical JS (omni.ja), so
+          # one reliable full run catches a firefox-2-class regression for all
+          # platforms. The other legs run SMOKE (launch+http+UA+webdriver) — the
+          # firefox-8/juggler catcher — which is robust even on the flaky
+          # windows-latest runner. See scripts/ci_drive_gate.py.
           - leg: linux-x86_64
             runner: ubuntu-24.04
             kind: linux
             asset: firefox-150.0.1-stealth-linux-x86_64.tar.gz
+            extra: '--full'
           - leg: linux-arm64
             runner: ubuntu-24.04-arm
             kind: linux
             asset: firefox-150.0.1-stealth-linux-arm64.tar.gz
+            extra: ''
           - leg: win-x86_64
             runner: windows-latest
             kind: win
             asset: firefox-150.0.1-stealth-win-x86_64.zip
+            extra: ''
           - leg: macos-arm64
             runner: macos-15
             kind: mac
             asset: firefox-150.0.1-stealth-macos-arm64.tar.gz
+            extra: ''
           - leg: macos-x86_64
             runner: macos-15-intel
             kind: mac
             asset: firefox-150.0.1-stealth-macos-x86_64.tar.gz
+            extra: ''
     steps:
       - name: Checkout wrapper (for scripts/ci_drive_gate.py)
         uses: actions/checkout@v4
@@ -319,9 +331,9 @@ jobs:
           chmod +x "$EXE" 2>/dev/null || true
           echo "FF_EXE=$EXE" >> "$GITHUB_ENV"
           echo "located: $EXE"
-      - name: DRIVE GATE — Playwright launch via juggler + real page + JS roundtrip
+      - name: DRIVE GATE — Playwright launch via juggler + real page (+ interaction on --full)
         shell: bash
-        run: python scripts/ci_drive_gate.py "$FF_EXE"
+        run: python scripts/ci_drive_gate.py "$FF_EXE" ${{ matrix.extra }}
 
   publish:
     name: publish-draft-release

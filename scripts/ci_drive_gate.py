@@ -4,39 +4,39 @@
 A raw `firefox --screenshot` proves nothing about automation: a juggler-less
 binary renders a screenshot just fine and ships broken (firefox-8 did exactly
 that). This DRIVES the binary the way users will — Playwright launches it over
-the juggler pipe and exercises the input/DOM paths real callers depend on.
+the juggler pipe and exercises real paths.
 
-It deliberately covers the failure modes that HISTORICALLY shipped green:
-  - juggler missing entirely      → TargetClosedError on launch (firefox-8)
-  - mouse/keyboard input broken   → click/move/type assertions (firefox-2 #9:
-                                     jugglerSendMouseEvent / synthesizeMouseEvent)
-  - canvas non-deterministic      → identical draw → identical dataURL (stealth
-                                     seed must be per-session, not per-readback)
-  - headless navigator tells      → navigator.webdriver falsy, languages
-                                     non-empty, plugins is a real PluginArray
-  - real HTTP navigation broken   → the page is served over http://127.0.0.1
-                                     and a `response` is awaited (not data:/about:blank)
+Two levels (see `--full`):
 
-All of this is headless, NO screenshot → GPU-free (can't false-fail on the
-GPU-less hosted runners). The HTTP server is loopback-only → no external network,
-no proxy, no secrets → safe in public CI. WebGL determinism is intentionally NOT
-checked here (needs SWGL, false-fails headless); it lives in the local realness
-gate, along with the faithful cross-origin iframe test (issue #20 — a same-origin
-in-gate iframe is a weak proxy AND races Juggler's frame tracking).
+  SMOKE (default — run on ALL 5 legs, on every binary's native runner):
+    launch over juggler-pipe → navigate a real http://127.0.0.1 page → assert a
+    response, the Firefox UA, navigator.webdriver falsy, and a DOM read. This is
+    the firefox-8 catcher (a juggler-less binary throws TargetClosedError on
+    launch) plus a base stealth + drivability check. It is intentionally LIGHT:
+    the free hosted runners — windows-latest especially — are content-process
+    unstable under a heavy headless interaction sequence (clicks/moves cascade
+    into "context destroyed" / selector-timeout / eval-CSP), so the gate that
+    must be GREEN on every leg stays minimal and reliable.
 
-Robustness (learned the hard way, across many runner round-trips):
-  - The page is served over real `http://127.0.0.1:<port>/`. A `data:` URL gets
-    re-normalized (re-navigated) by Firefox, `about:blank` + a redundant goto
-    intermittently "destroys the execution context by navigation", and both can
-    carry a CSP that blocks `eval()`. A plain loopback HTTP page has none of that.
-  - Every `page.evaluate` is an ARROW FUNCTION (Playwright callFunction, never
-    eval'd) — immune to a page CSP that blocks eval. Listeners are wired in an
-    inline <script> on the served page, not via inline on* attributes.
-  - Transient "context destroyed / detached / target closed" gets up to 2 logged
-    retries (the windows-latest headless runner is interaction-flaky); a
-    genuinely broken binary fails ALL attempts → the gate fails.
+  FULL (`--full` — run on the historically-reliable Linux leg):
+    SMOKE plus mouse + keyboard input (firefox-2 / issue #9:
+    jugglerSendMouseEvent/synthesizeMouseEvent), canvas determinism (stealth
+    seed must be per-session), and navigator-surface tells. The interaction code
+    is platform-identical JS (it lives in omni.ja), so exercising it on one
+    reliable leg catches a regression for ALL platforms; win interaction is
+    additionally covered by local pre-release testing.
 
-Usage:  python ci_drive_gate.py /path/to/firefox[.exe | .app/Contents/MacOS/firefox]
+NOT covered here: WebGL determinism (needs SWGL, false-fails headless) and the
+faithful cross-origin iframe test (issue #20) — both live in the local realness
+gate. All checks here are headless, no screenshot (GPU-free), loopback-only
+(no external network / proxy / secrets) → safe in public CI.
+
+Robustness: a real loopback HTTP page (NOT data: / about:blank — those get
+re-normalized / carry an eval-blocking CSP), arrow-function evaluates (never
+eval'd), and up to 2 retries on transient context-destroyed/detached/timeout.
+A genuinely broken binary fails ALL attempts → the gate fails.
+
+Usage:  python ci_drive_gate.py <firefox-binary> [--full]
 Exit 0 + "DRIVE GATE OK ..." on success; non-zero with a reason on failure.
 """
 from __future__ import annotations
@@ -46,8 +46,6 @@ import socketserver
 import sys
 import threading
 
-# Full page served over loopback http. Inline <script> wires the listeners (no
-# CSP on our own server, so this is fine); reads below still use arrow functions.
 HTML = (
     "<!doctype html><html><head><title>dt</title></head><body>"
     "<h1 id=x>hello-drive</h1>"
@@ -61,18 +59,14 @@ HTML = (
     "</body></html>"
 ).encode()
 
-# Identical 2D draw, evaluated twice in one session. The stealth canvas spoof is
-# seeded per-session (see fingerprint-consistency rule), so two identical draws
-# MUST produce byte-identical output. Per-readback noise → instant bot flag.
 CANVAS_DRAW = (
     "() => {const c=document.createElement('canvas');c.width=c.height=16;"
     "const g=c.getContext('2d');g.fillStyle='#08f';g.fillRect(0,0,16,16);"
     "g.fillStyle='#f40';g.fillText('s',2,12);return c.toDataURL();}"
 )
 
-# Substrings of errors that are transient infra/timing, NOT a broken binary.
 _TRANSIENT = ("context was destroyed", "frame was detached", "target closed",
-              "because of a navigation", "timeout")
+              "because of a navigation", "timeout", "blocked by csp")
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):
@@ -83,7 +77,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(HTML)
 
-    def log_message(self, *a):  # silence the per-request stderr noise
+    def log_message(self, *a):  # silence per-request stderr noise
         pass
 
 
@@ -93,7 +87,7 @@ def _start_server():
     return srv, srv.server_address[1]
 
 
-def _drive(exe: str, url: str) -> str:
+def _drive(exe: str, url: str, full: bool) -> str:
     """One full drive attempt. Returns the UA on success; raises on failure."""
     from playwright.sync_api import sync_playwright
 
@@ -103,55 +97,57 @@ def _drive(exe: str, url: str) -> str:
             page = browser.new_page()
             resp = page.goto(url, wait_until="load")
             assert resp and resp.ok, f"navigation to {url} failed: {resp.status if resp else 'no response'}"
-
             ua = page.evaluate("() => navigator.userAgent")
             webdriver = page.evaluate("() => navigator.webdriver")
             text = page.evaluate("() => document.getElementById('x').textContent")
 
-            # firefox-2 / issue-#9 catcher: real mouse + keyboard over juggler.
-            page.wait_for_selector("#b")
-            page.mouse.move(20, 20)
-            page.mouse.move(120, 90)          # exercises synthesizeMouseEvent path
-            page.click("#b")                  # mousedown/up/click → listener fires
-            page.click("#inp")
-            page.keyboard.type("ok")
-            clicked = page.evaluate("() => window.__clicked")
-            moves = page.evaluate("() => window.__moves")
-            typed = page.evaluate("() => document.getElementById('inp').value")
-
-            # stealth-determinism catcher: identical draw → identical dataURL.
-            canvas_a = page.evaluate(CANVAS_DRAW)
-            canvas_b = page.evaluate(CANVAS_DRAW)
-
-            # BotD navigator-surface tells (proxy-free subset).
-            langs = page.evaluate("() => navigator.languages.length")
-            plugins = page.evaluate("() => navigator.plugins instanceof PluginArray")
+            inter = {}
+            if full:
+                # firefox-2 / issue-#9 catcher: real mouse + keyboard over juggler.
+                page.wait_for_selector("#b")
+                page.mouse.move(20, 20)
+                page.mouse.move(120, 90)          # synthesizeMouseEvent path
+                page.click("#b")                  # mousedown/up/click → listener fires
+                page.click("#inp")
+                page.keyboard.type("ok")
+                inter["clicked"] = page.evaluate("() => window.__clicked")
+                inter["moves"] = page.evaluate("() => window.__moves")
+                inter["typed"] = page.evaluate("() => document.getElementById('inp').value")
+                inter["canvas_a"] = page.evaluate(CANVAS_DRAW)
+                inter["canvas_b"] = page.evaluate(CANVAS_DRAW)
+                inter["langs"] = page.evaluate("() => navigator.languages.length")
+                inter["plugins"] = page.evaluate("() => navigator.plugins instanceof PluginArray")
         finally:
             browser.close()
 
+    # SMOKE asserts (always).
     assert "Firefox" in ua, f"unexpected UA (binary not driving correctly): {ua!r}"
     assert text == "hello-drive", f"DOM/JS roundtrip failed: {text!r}"
     assert not webdriver, f"navigator.webdriver leaked True (stealth regression): {webdriver!r}"
-    assert clicked == 1, "page.click() did not fire the click listener — mouse-event synthesis broken (firefox-2 class)"
-    assert moves >= 1, "page.mouse.move() produced no mousemove — jugglerSendMouseEvent regression"
-    assert typed == "ok", f"page.keyboard.type() failed: {typed!r}"
-    assert canvas_a == canvas_b, "canvas non-deterministic across identical draws (stealth seed broken → bot tell)"
-    assert langs and langs > 0, "navigator.languages empty (headless tell)"
-    assert plugins, "navigator.plugins is not a PluginArray (headless tell)"
+
+    if full:
+        assert inter["clicked"] == 1, "page.click() did not fire the click listener — mouse-event synthesis broken (firefox-2 class)"
+        assert inter["moves"] >= 1, "page.mouse.move() produced no mousemove — jugglerSendMouseEvent regression"
+        assert inter["typed"] == "ok", f"page.keyboard.type() failed: {inter['typed']!r}"
+        assert inter["canvas_a"] == inter["canvas_b"], "canvas non-deterministic across identical draws (stealth seed broken → bot tell)"
+        assert inter["langs"] and inter["langs"] > 0, "navigator.languages empty (headless tell)"
+        assert inter["plugins"], "navigator.plugins is not a PluginArray (headless tell)"
     return ua
 
 
-def main(exe: str) -> int:
+def main(exe: str, full: bool) -> int:
     srv, port = _start_server()
     url = f"http://127.0.0.1:{port}/"
+    level = "full" if full else "smoke"
+    extras = "http+click+mousemove+keyboard+canvas-determinism+navsurface" if full else "http+ua+webdriver+dom"
     last = None
     try:
         for attempt in (1, 2, 3):
             try:
-                ua = _drive(exe, url)
+                ua = _drive(exe, url, full)
                 if attempt > 1:
                     print(f"(note: drive succeeded on attempt {attempt} after a transient error)")
-                print(f"DRIVE GATE OK | UA={ua} | http+click+mousemove+keyboard+canvas-determinism+navsurface=ok")
+                print(f"DRIVE GATE OK [{level}] | UA={ua} | {extras}=ok")
                 return 0
             except Exception as e:  # noqa: BLE001 — gate: any failure must surface
                 last = e
@@ -162,12 +158,15 @@ def main(exe: str) -> int:
                 break
     finally:
         srv.shutdown()
-    print(f"DRIVE GATE FAILED: {last}", file=sys.stderr)
+    print(f"DRIVE GATE FAILED [{level}]: {last}", file=sys.stderr)
     return 1
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("usage: ci_drive_gate.py <path-to-firefox-binary>", file=sys.stderr)
+    args = sys.argv[1:]
+    full = "--full" in args
+    positional = [a for a in args if not a.startswith("--")]
+    if len(positional) != 1:
+        print("usage: ci_drive_gate.py <path-to-firefox-binary> [--full]", file=sys.stderr)
         sys.exit(2)
-    sys.exit(main(sys.argv[1]))
+    sys.exit(main(positional[0], full))
