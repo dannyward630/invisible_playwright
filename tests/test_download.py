@@ -418,7 +418,7 @@ def test_github_token_none_when_unset(monkeypatch):
 # Bonus coverage: unsupported platform raises NotImplementedError before any HTTP
 @pytest.mark.unit
 def test_ensure_binary_unsupported_platform_raises(monkeypatch):
-    monkeypatch.setattr("sys.platform", "darwin")
+    monkeypatch.setattr("sys.platform", "freebsd")  # win32/linux/darwin are supported
     import platform
     monkeypatch.setattr(platform, "machine", lambda: "AMD64")
     with pytest.raises(NotImplementedError, match="unsupported platform"):

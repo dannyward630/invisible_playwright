@@ -1,0 +1,307 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# release.yml — build all 5 patched-Firefox targets at $0 and publish them as
+# DRAFT GitHub Release assets, named per the wrapper contract (constants.ARCHIVE_NAME).
+# DRAFT on purpose: a human runs the realness gate and only THEN un-drafts + bumps
+# BINARY_VERSION. Nothing auto-ships (issue #14 lesson).
+#
+# PACKAGING (issue #14: dangling symlinks broke 265 downloads — never again):
+#   Linux → cp -aL (dereference ALL symlinks into real files) + rm dev tools +
+#           strip + sanitize + tar at ROOT, then validate_release.py as a HARD
+#           in-pipeline gate (the exact battle-tested script from the source repo).
+#   Win   → mach package; zip the CONTENTS of dist/firefox (clean tree, NOT
+#           dist/bin) so firefox.exe sits at the zip ROOT. Runtime-gated on a real
+#           windows-latest runner (headless screenshot).
+#   macOS → mach package; ad-hoc codesign the .app; PRESERVE its internal relative
+#           symlinks (a .app legitimately has them — cp -aL would break it); verify
+#           every symlink is relative+internal; tar the bundle. --version self-gate.
+#
+# Trigger: push a tag `firefox-N`, or run manually.  Hybrid runners, all free.
+# ─────────────────────────────────────────────────────────────────────────────
+name: release
+
+on:
+  push:
+    tags: ['firefox-*']
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'invisible_firefox ref to build'
+        default: 'stealth/150'
+      release_tag:
+        description: 'release tag to publish the draft under (e.g. firefox-9)'
+        required: true
+
+env:
+  SOURCE_REPO: feder-cr/invisible_firefox
+  SOURCE_REF: ${{ github.event.inputs.source_ref || 'stealth/150' }}
+
+jobs:
+  build:
+    name: build-${{ matrix.leg }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: linux-x86_64
+            runner: ubuntu-24.04
+            family: linux
+            target: ''
+            rust_target: x86_64-unknown-linux-gnu
+            win_disables: 'no'
+            extra_pkgs: ''
+            asset: firefox-150.0.1-stealth-linux-x86_64.tar.gz
+          - leg: linux-arm64
+            runner: ubuntu-24.04-arm
+            family: linux
+            target: ''
+            rust_target: aarch64-unknown-linux-gnu
+            win_disables: 'no'
+            extra_pkgs: ''
+            asset: firefox-150.0.1-stealth-linux-arm64.tar.gz
+          - leg: win-x86_64
+            runner: ubuntu-24.04
+            family: win
+            target: x86_64-pc-windows-msvc
+            rust_target: x86_64-pc-windows-msvc
+            win_disables: 'yes'
+            extra_pkgs: 'msitools p7zip-full zip'
+            asset: firefox-150.0.1-stealth-win-x86_64.zip
+          - leg: macos-arm64
+            runner: macos-15
+            family: mac
+            target: aarch64-apple-darwin
+            rust_target: aarch64-apple-darwin
+            win_disables: 'no'
+            extra_pkgs: ''
+            asset: firefox-150.0.1-stealth-macos-arm64.tar.gz
+          - leg: macos-x86_64
+            runner: macos-15-intel
+            family: mac
+            target: x86_64-apple-darwin
+            rust_target: x86_64-apple-darwin
+            win_disables: 'no'
+            extra_pkgs: ''
+            asset: firefox-150.0.1-stealth-macos-x86_64.tar.gz
+    steps:
+      - name: Free disk + 16G swap (Linux runners)
+        if: matrix.family != 'mac'
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+            /usr/local/share/boost "${AGENT_TOOLSDIRECTORY:-/opt/hostedtoolcache}" 2>/dev/null || true
+          sudo fallocate -l 16G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile || true
+
+      - name: Checkout patched Firefox source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.SOURCE_REPO }}
+          ref: ${{ env.SOURCE_REF }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+
+      - name: Install Linux build tools
+        if: matrix.family != 'mac'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y util-linux binutils ${{ matrix.extra_pkgs }}
+
+      - name: Select Xcode 26.2 + export SDK path (macOS)
+        if: matrix.family == 'mac'
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.2.app
+          SDKP="$(xcrun --show-sdk-path)"
+          echo "SDK_PATH=$SDKP" >> "$GITHUB_ENV"
+          echo "macOS SDK $(xcrun --sdk macosx --show-sdk-version) at $SDKP"
+
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.rust_target }} || true
+
+      - name: Extend the repo .mozconfig (NO mold; +target/SDK as needed)
+        run: |
+          test -f .mozconfig || { echo "ERROR: no .mozconfig in source"; exit 1; }
+          rm -f mozconfig
+          {
+            echo ""
+            echo "# --- release CI levers for ${{ matrix.leg }} (mold intentionally OFF — it segfaults libxul) ---"
+            echo "ac_add_options --disable-debug-symbols"
+          } >> .mozconfig
+          if [ -n "${{ matrix.target }}" ]; then echo "ac_add_options --target=${{ matrix.target }}" >> .mozconfig; fi
+          if [ "${{ matrix.family }}" = "mac" ]; then echo "ac_add_options --with-macos-sdk=$SDK_PATH" >> .mozconfig; fi
+          if [ "${{ matrix.win_disables }}" = "yes" ]; then
+            { echo "ac_add_options --disable-default-browser-agent";
+              echo "ac_add_options --disable-maintenance-service";
+              echo "ac_add_options --disable-update-agent"; } >> .mozconfig
+          fi
+          if [ "${{ matrix.family }}" = "mac" ]; then NCPU=$(sysctl -n hw.ncpu); else NCPU=4; fi
+          { echo "mk_add_options MOZ_PARALLEL_BUILD=$NCPU";
+            echo "mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-rel"; } >> .mozconfig
+          echo "----- final .mozconfig -----"; cat .mozconfig
+
+      - name: Build
+        run: ./mach build
+
+      # ── LINUX: dereference symlinks (issue #14) + strip + sanitize + tar@root + GATE
+      - name: Package + validate (Linux)
+        if: matrix.family == 'linux'
+        run: |
+          set -e
+          DIST=obj-rel/dist/bin
+          STAGING=staging
+          rm -rf "$STAGING"; mkdir -p "$STAGING" out
+          cp -aL "$DIST/." "$STAGING/"                      # -L: dereference ALL symlinks into real files
+          N=$(find "$STAGING" -type l | wc -l)
+          [ "$N" -eq 0 ] || { echo "ERROR: $N symlinks remain after cp -aL"; exit 1; }
+          for t in xpcshell certutil pk12util rapl; do rm -f "$STAGING/$t"; done
+          # JUGGLER GATE: the binary is undrivable by Playwright without it (see 70-known-bugs)
+          { [ -e "$STAGING/chrome/juggler.manifest" ] && [ -d "$STAGING/chrome/juggler" ]; } \
+            || { echo "ERROR: juggler missing from package (chrome/juggler) — Playwright can't drive it"; exit 1; }
+          echo "juggler GATE OK (loose chrome/juggler present)"
+          find "$STAGING" -type f \
+            \( -name '*.so' -o -name firefox -o -name firefox-bin -o -name plugin-container \
+               -o -name pingsender -o -name glxtest -o -name vaapitest -o -name updater \) \
+            -exec strip --strip-debug {} + 2>/dev/null || true
+          STAGING="$STAGING" python3 scripts/linux_sanitize.py || true   # no-op in CI (no /home/feder), defensive
+          tar --owner=0 --group=0 --numeric-owner --mtime="2026-01-01 00:00:00 UTC" \
+              -czf "out/${{ matrix.asset }}" -C "$STAGING" .              # firefox at ROOT
+          echo "=== HARD GATE: scripts/validate_release.py (the issue-#14 protector) ==="
+          python3 scripts/validate_release.py --linux "out/${{ matrix.asset }}" --linux-only
+          ls -la out/
+
+      # ── WINDOWS (cross): zip the CLEAN dist/firefox tree, firefox.exe at root
+      - name: Package (Windows cross)
+        if: matrix.family == 'win'
+        run: |
+          set -e
+          ./mach package || echo "mach package rc=$? (continuing to locate the app tree)"
+          # Prefer the clean packaged tree; fall back to dist/bin if cross didn't produce dist/firefox
+          if [ -f obj-rel/dist/firefox/firefox.exe ]; then WIN_APP=obj-rel/dist/firefox
+          elif [ -f obj-rel/dist/bin/firefox.exe ]; then WIN_APP=obj-rel/dist/bin
+          else echo "ERROR: firefox.exe not found in dist/firefox nor dist/bin"; exit 1; fi
+          echo "packaging from: $WIN_APP"
+          # JUGGLER GATE: omni.ja must carry juggler (dist/firefox) or loose chrome/ (dist/bin fallback)
+          if [ -f "$WIN_APP/omni.ja" ]; then
+            python3 -c "import zipfile,sys; sys.exit(0 if any('juggler' in n.lower() for n in zipfile.ZipFile('$WIN_APP/omni.ja').namelist()) else 1)" \
+              || { echo "ERROR: juggler missing from $WIN_APP/omni.ja — Playwright can't drive it"; exit 1; }
+          elif [ ! -d "$WIN_APP/chrome/juggler" ]; then
+            echo "ERROR: juggler missing from $WIN_APP (no omni.ja juggler, no loose chrome/juggler)"; exit 1
+          fi
+          echo "juggler GATE OK (win)"
+          mkdir -p out
+          ( cd "$WIN_APP" && zip -qr "$GITHUB_WORKSPACE/out/${{ matrix.asset }}" . )   # firefox.exe at zip ROOT
+          ls -la out/
+
+      # ── macOS: package .app, ad-hoc sign, verify relative-internal symlinks, --version gate, tar
+      - name: Package + validate (macOS)
+        if: matrix.family == 'mac'
+        run: |
+          set -e
+          ./mach package
+          APP="$(find obj-rel/dist -maxdepth 2 -name '*.app' -type d | head -1)"
+          [ -n "$APP" ] || { echo "ERROR: no .app produced"; exit 1; }
+          echo "built app: $APP"
+          # JUGGLER GATE: the .app's omni.ja must carry juggler (else Playwright can't drive it)
+          python3 -c "import zipfile,sys,glob; jas=glob.glob('$APP/Contents/Resources/omni.ja')+glob.glob('$APP/Contents/Resources/browser/omni.ja'); sys.exit(0 if jas and any(any('juggler' in n.lower() for n in zipfile.ZipFile(j).namelist()) for j in jas) else 1)" \
+            || { echo "ERROR: juggler missing from .app omni.ja — Playwright can't drive it"; exit 1; }
+          echo "juggler GATE OK (mac)"
+          codesign --force --deep --sign - --timestamp=none "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          echo "=== --version GATE ==="
+          "$APP/Contents/MacOS/firefox" --version
+          echo "=== critical files present ==="
+          for need in "Contents/MacOS/firefox" "Contents/Info.plist"; do
+            [ -e "$APP/$need" ] || { echo "ERROR: missing $need"; exit 1; }
+          done
+          echo "=== verify NO absolute symlinks in the .app (relative-internal ones are fine) ==="
+          BAD="$(find "$APP" -type l -print0 | xargs -0 -I{} sh -c 't=$(readlink "{}"); case "$t" in /*) echo "{} -> $t";; esac')"
+          [ -z "$BAD" ] || { echo "ERROR: absolute symlinks in .app (break on user machines):"; echo "$BAD" | head -5; exit 1; }
+          echo "mac .app OK: critical files present, no absolute symlinks"
+          STABLE="$(dirname "$APP")/Firefox.app"
+          [ "$APP" = "$STABLE" ] || mv "$APP" "$STABLE"
+          mkdir -p out
+          tar -czf "out/${{ matrix.asset }}" -C "$(dirname "$STABLE")" Firefox.app   # preserves internal symlinks
+          ls -la out/
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: asset-${{ matrix.leg }}
+          path: out/${{ matrix.asset }}
+          if-no-files-found: error
+          retention-days: 7
+
+  # Windows binary is cross-built on Linux → gate it on a real Windows runner.
+  gate-windows:
+    name: gate-windows
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download win asset
+        uses: actions/download-artifact@v4
+        with: { name: asset-win-x86_64, path: art }
+      - name: Extract + structure + headless render gate
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem art -Filter *.zip | Select-Object -First 1
+          Expand-Archive $zip.FullName -DestinationPath ff -Force
+          foreach ($f in 'firefox.exe','application.ini','dependentlibs.list') {
+            if (-not (Test-Path (Join-Path ff $f))) { throw "missing critical file: $f" }
+          }
+          $exe = Join-Path (Resolve-Path ff) 'firefox.exe'
+          Remove-Item shot.png -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath $exe -ArgumentList '--headless','--no-remote','--profile','prof','--screenshot',"$PWD\shot.png",'https://example.com' -PassThru -NoNewWindow
+          if (-not $p.WaitForExit(90000)) { $p.Kill(); throw 'win gate TIMEOUT' }
+          Start-Sleep 1
+          if (-not (Test-Path shot.png) -or (Get-Item shot.png).Length -lt 3000) { throw 'win gate: no/empty screenshot' }
+          Write-Output "win gate OK: firefox.exe runs + renders ($((Get-Item shot.png).Length) bytes)"
+      - uses: actions/upload-artifact@v4
+        with: { name: gate-win-screenshot, path: shot.png, if-no-files-found: warn, retention-days: 7 }
+
+  publish:
+    name: publish-draft-release
+    needs: [build, gate-windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build assets
+        uses: actions/download-artifact@v4
+        with: { pattern: asset-*, path: dl, merge-multiple: true }
+      - name: Generate checksums.txt
+        run: |
+          cd dl; ls -la
+          # explicit glob — never include checksums.txt itself (the `*`-includes-itself trap)
+          sha256sum firefox-150.0.1-stealth-* > checksums.txt
+          echo "----- checksums.txt -----"; cat checksums.txt
+      - name: Resolve release tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.release_tag }}"
+          [ -z "$TAG" ] && TAG="${GITHUB_REF_NAME}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "publishing DRAFT release for tag: $TAG"
+      - name: Create DRAFT release with all assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: invisible_firefox (150.0.1) rev ${{ steps.tag.outputs.tag }}
+          draft: true
+          prerelease: false
+          files: |
+            dl/*.tar.gz
+            dl/*.zip
+            dl/checksums.txt
+          body: |
+            Patched Firefox 150.0.1 — built on GitHub Actions ($0, no mold).
+            Targets: linux-x86_64, linux-arm64, win-x86_64, macos-arm64, macos-x86_64.
+
+            DRAFT — do not publish until validate_release.py + realness gate pass on all archives.
+
+            macOS: ad-hoc signed (not notarized). After download run:
+              xattr -dr com.apple.quarantine Firefox.app
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

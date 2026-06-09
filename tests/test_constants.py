@@ -31,9 +31,16 @@ def test_archive_name_linux():
 
 
 @pytest.mark.unit
-def test_archive_name_unsupported_raises():
+def test_archive_name_macos_arm64():
+    name = ARCHIVE_NAME("darwin", "arm64")
+    assert name.endswith(".tar.gz")
+    assert "macos-arm64" in name
+
+
+@pytest.mark.unit
+def test_archive_name_truly_unsupported_raises():
     with pytest.raises(NotImplementedError):
-        ARCHIVE_NAME("darwin", "arm64")
+        ARCHIVE_NAME("plan9", "x86_64")
 
 
 @pytest.mark.unit
@@ -77,20 +84,18 @@ def test_archive_name_rejects_unsupported_arches(machine):
 
 @pytest.mark.unit
 @pytest.mark.parametrize("machine", ["arm64", "aarch64"])
-def test_archive_name_arm64_not_yet_supported(machine):
-    """ARM64 is a frequent request (issue #6). Until binaries exist for it,
-    ARCHIVE_NAME should hard-fail rather than silently degrade. If this test
-    starts failing because someone shipped ARM64 builds, replace it with the
-    positive case."""
-    with pytest.raises(NotImplementedError):
-        ARCHIVE_NAME("linux", machine)
+def test_archive_name_arm64_supported(machine):
+    """ARM64 is shipped now (issue #6): both Linux aarch64 and macOS arm64.
+    ARCHIVE_NAME must map both machine spellings to the canonical -arm64 asset."""
+    assert ARCHIVE_NAME("linux", machine) == "firefox-150.0.1-stealth-linux-arm64.tar.gz"
+    assert ARCHIVE_NAME("darwin", machine) == "firefox-150.0.1-stealth-macos-arm64.tar.gz"
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("platform_key", ["darwin", "freebsd", "cygwin", "openbsd"])
+@pytest.mark.parametrize("platform_key", ["freebsd", "cygwin", "openbsd"])
 def test_archive_name_rejects_unsupported_platforms(platform_key):
-    """Same logic — non-Linux/non-Windows platforms must raise, not silently
-    pick one of the two."""
+    """win32/linux/darwin are supported; other platforms must raise, not
+    silently pick one of the three."""
     with pytest.raises(NotImplementedError, match=platform_key):
         ARCHIVE_NAME(platform_key, "x86_64")
 
@@ -104,7 +109,7 @@ def test_archive_name_rejects_unsupported_platforms(platform_key):
 def test_binary_entry_rel_covers_every_supported_platform():
     """If ARCHIVE_NAME accepts a platform key, BINARY_ENTRY_REL must declare
     where the executable lives inside the archive for it."""
-    for plat in ["win32", "linux"]:
+    for plat in ["win32", "linux", "darwin"]:
         ARCHIVE_NAME(plat, "x86_64")  # must not raise
         assert plat in BINARY_ENTRY_REL, (
             f"ARCHIVE_NAME accepts {plat!r} but BINARY_ENTRY_REL has no entry "
@@ -118,6 +123,7 @@ def test_binary_entry_rel_extension_matches_platform():
     assert BINARY_ENTRY_REL["win32"].endswith(".exe")
     assert not BINARY_ENTRY_REL["linux"].endswith(".exe")
     assert BINARY_ENTRY_REL["linux"] == "firefox"
+    assert BINARY_ENTRY_REL["darwin"].endswith(".app/Contents/MacOS/firefox")
 
 
 # ---- RELEASE_URL_TEMPLATE shape ------------------------------------------- #

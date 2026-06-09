@@ -6,6 +6,7 @@ import os
 import platform
 import re
 import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -120,6 +121,31 @@ def _extract(archive: Path, dst: Path) -> None:
         raise RuntimeError(f"unknown archive format: {archive}")
 
 
+def _post_extract_darwin(app_root: Path, entry: Path) -> None:
+    """Make an ad-hoc-signed .app launchable on macOS.
+
+    The .app is downloaded via requests (no Finder quarantine attached), but we
+    strip com.apple.quarantine defensively and ensure the inner binary is
+    executable. We exec the inner binary directly (not via LaunchServices), so
+    Gatekeeper's first-launch prompt does not apply; the ad-hoc signature
+    (applied in release.yml) is what lets the arm64 Mach-O run at all.
+    """
+    app = app_root
+    # walk up to the .app bundle dir if entry points inside it
+    for parent in entry.parents:
+        if parent.name.endswith(".app"):
+            app = parent
+            break
+    try:
+        subprocess.run(["xattr", "-dr", "com.apple.quarantine", str(app)], check=False)
+    except FileNotFoundError:
+        pass
+    try:
+        entry.chmod(0o755)
+    except OSError:
+        pass
+
+
 def ensure_binary(version: str = BINARY_VERSION) -> Path:
     """Return a path to a runnable Firefox executable. Download if needed."""
     plat = sys.platform
@@ -153,6 +179,9 @@ def ensure_binary(version: str = BINARY_VERSION) -> Path:
                 f"SHA256 mismatch for {asset}: got {actual}, expected {expected}"
             )
         _extract(archive_path, version_dir)
+
+    if plat == "darwin":
+        _post_extract_darwin(version_dir, entry)
 
     if not entry.exists():
         raise RuntimeError(f"binary not found after extraction: {entry}")

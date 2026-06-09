@@ -19,13 +19,15 @@ BINARY_BASENAME: str = f"firefox-{FIREFOX_UPSTREAM_VERSION}-stealth"
 def ARCHIVE_NAME(platform_key: str, machine: str) -> str:
     """Return the platform-specific archive filename.
 
-    platform_key: sys.platform ("win32", "linux")
-    machine:      platform.machine() ("AMD64", "x86_64", ...)
+    platform_key: sys.platform ("win32", "linux", "darwin")
+    machine:      platform.machine() ("AMD64", "x86_64", "arm64", "aarch64", ...)
     """
     pk = platform_key.lower()
     m = machine.lower()
     if m in {"amd64", "x86_64"}:
         arch = "x86_64"
+    elif m in {"arm64", "aarch64"}:
+        arch = "arm64"
     else:
         raise NotImplementedError(f"unsupported arch: {machine}")
 
@@ -33,13 +35,18 @@ def ARCHIVE_NAME(platform_key: str, machine: str) -> str:
         return f"{BINARY_BASENAME}-win-{arch}.zip"
     if pk == "linux":
         return f"{BINARY_BASENAME}-linux-{arch}.tar.gz"
+    if pk == "darwin":
+        return f"{BINARY_BASENAME}-macos-{arch}.tar.gz"
     raise NotImplementedError(f"unsupported platform: {platform_key}")
 
 
 # Binary entry point relative path inside the extracted archive root.
+# macOS ships the .app bundle (renamed to a stable "Firefox.app" by release.yml);
+# the wrapper execs the inner binary directly, which sidesteps Gatekeeper.
 BINARY_ENTRY_REL = {
     "win32": "firefox.exe",
     "linux": "firefox",
+    "darwin": "Firefox.app/Contents/MacOS/firefox",
 }
 
 # GitHub release URL template. The "TODO" owner is resolved at publication time.
