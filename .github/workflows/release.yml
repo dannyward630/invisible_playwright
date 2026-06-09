@@ -98,14 +98,14 @@ jobs:
           sudo fallocate -l 16G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile || true
 
       - name: Checkout patched Firefox source
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: ${{ env.SOURCE_REPO }}
           ref: ${{ env.SOURCE_REF }}
           fetch-depth: 1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with: { python-version: '3.11' }
 
       - name: Install Linux build tools
@@ -240,7 +240,7 @@ jobs:
           ls -la out/
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: asset-${{ matrix.leg }}
           path: out/${{ matrix.asset }}
@@ -301,18 +301,24 @@ jobs:
             extra: ''
     steps:
       - name: Checkout wrapper (for scripts/ci_drive_gate.py)
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with: { fetch-depth: 1 }
       - name: Download asset
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: asset-${{ matrix.leg }}
           path: art
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with: { python-version: '3.11' }
       - name: Install Playwright driver (no bundled browser — we override executable_path)
-        run: python -m pip install --quiet "playwright==1.55.0"
+        # Pin from a SINGLE source (scripts/playwright_pin.txt) so release.yml and
+        # verify-assets.yml can't drift to different versions. The drive gate then
+        # ENFORCES playwright↔juggler compatibility: an incompatible pin fails the
+        # launch/drive (TargetClosedError / protocol error) and nothing publishes.
+        # Bump the pin file in lockstep when the juggler is re-synced from upstream.
+        shell: bash
+        run: python -m pip install --quiet "playwright==$(cat scripts/playwright_pin.txt)"
       - name: Linux system deps for headless firefox
         if: matrix.kind == 'linux'
         run: sudo "$(which python)" -m playwright install-deps firefox
@@ -343,7 +349,7 @@ jobs:
       contents: write
     steps:
       - name: Download all build assets
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with: { pattern: asset-*, path: dl, merge-multiple: true }
       - name: Assert all 5 target archives present (no silent partial release)
         run: |
@@ -373,7 +379,7 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "publishing DRAFT release for tag: $TAG"
       - name: Create DRAFT release with all assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: invisible_firefox (150.0.1) rev ${{ steps.tag.outputs.tag }}
