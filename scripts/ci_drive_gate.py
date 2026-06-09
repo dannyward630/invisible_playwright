@@ -48,9 +48,11 @@ import sys
 from playwright.sync_api import sync_playwright
 
 # DOM built on about:blank (no data: URL to re-normalize → no spurious nav).
+# No inline onclick — inline handlers are CSP-sensitive; we wire the listener
+# via addEventListener inside the (function, not eval'd) setup call below.
 BODY = (
     "<h1 id=x>hello-drive</h1>"
-    "<button id=b onclick=\"window.__clicked=1\">go</button>"
+    "<button id=b>go</button>"
     "<input id=inp>"
 )
 
@@ -75,27 +77,33 @@ def _drive(exe: str) -> str:
         try:
             page = browser.new_page()
             page.goto("about:blank")  # canonical, never re-navigates
-            # Build the DOM + attach the mousemove counter in one shot.
+            # Build the DOM + wire click/mousemove listeners in one shot. Passed
+            # as a FUNCTION (Playwright callFunction, not eval) so a page CSP that
+            # blocks eval()/inline-handlers can't break the gate. All evaluates
+            # below are arrow functions for the same reason.
             page.evaluate(
-                "(html) => { document.body.innerHTML = html;"
+                "(html) => {"
+                " document.body.innerHTML = html;"
+                " document.getElementById('b').addEventListener('click', () => { window.__clicked = 1; });"
                 " window.__moves = 0;"
-                " window.addEventListener('mousemove', () => { window.__moves++; }); }",
+                " window.addEventListener('mousemove', () => { window.__moves++; });"
+                "}",
                 BODY,
             )
 
-            ua = page.evaluate("navigator.userAgent")
-            webdriver = page.evaluate("navigator.webdriver")
+            ua = page.evaluate("() => navigator.userAgent")
+            webdriver = page.evaluate("() => navigator.webdriver")
             text = page.evaluate("() => document.getElementById('x').textContent")
 
             # firefox-2 / issue-#9 catcher: real mouse + keyboard over juggler.
             page.wait_for_selector("#b")
             page.mouse.move(20, 20)
             page.mouse.move(120, 90)          # exercises synthesizeMouseEvent path
-            page.click("#b")                  # mousedown/up/click → onclick fires
+            page.click("#b")                  # mousedown/up/click → listener fires
             page.click("#inp")
             page.keyboard.type("ok")
-            clicked = page.evaluate("window.__clicked")
-            moves = page.evaluate("window.__moves")
+            clicked = page.evaluate("() => window.__clicked")
+            moves = page.evaluate("() => window.__moves")
             typed = page.evaluate("() => document.getElementById('inp').value")
 
             # stealth-determinism catcher: identical draw → identical dataURL.
@@ -103,8 +111,8 @@ def _drive(exe: str) -> str:
             canvas_b = page.evaluate(CANVAS_DRAW)
 
             # BotD navigator-surface tells (proxy-free subset).
-            langs = page.evaluate("navigator.languages.length")
-            plugins = page.evaluate("navigator.plugins instanceof PluginArray")
+            langs = page.evaluate("() => navigator.languages.length")
+            plugins = page.evaluate("() => navigator.plugins instanceof PluginArray")
         finally:
             browser.close()
 
