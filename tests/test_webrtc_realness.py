@@ -215,6 +215,43 @@ def test_mdns_host_is_invisible_to_creep_resolver():
 
 
 # ──────────────────────────────────────────────────────────────────────────
+#  SHIPPED-BASELINE guard — the cheap unit test that would have caught the
+#  2026-06-10 gap (baseline obfuscate=False, dead disableIPv6, orphan prefs).
+#  These lock the shipped wrapper config to the manually-validated one so a
+#  future edit / merge can't silently un-ship it. Run in tests.yml.
+# ──────────────────────────────────────────────────────────────────────────
+from invisible_playwright._fpforge import generate_profile  # noqa: E402
+from invisible_playwright.prefs import translate_profile_to_prefs  # noqa: E402
+
+
+@pytest.mark.unit
+def test_shipped_webrtc_baseline_is_the_validated_config():
+    prefs = translate_profile_to_prefs(generate_profile(seed=42))
+    # host candidate must be mDNS .local like vanilla Firefox (manually
+    # validated on BrowserLeaks/CreepJS through a residential proxy) — not a
+    # raw LAN IP.
+    assert prefs["media.peerconnection.ice.obfuscate_host_addresses"] is True
+    # IPv6 dropped via OUR live filter pref; the native pref is dead on FF150
+    # and must not be relied upon (or re-introduced as if it worked).
+    assert prefs["zoom.stealth.webrtc.disable_ipv6"] is True
+    assert "media.peerconnection.ice.disableIPv6" not in prefs
+    # peerconnection stays ON (a disabled WebRTC is itself a tell).
+    assert prefs["media.peerconnection.enabled"] is True
+
+
+@pytest.mark.unit
+def test_no_orphan_prefs_in_baseline():
+    """zoom.stealth.timezone / zoom.stealth.seed are read by NO C++ — they must
+    not be written (juggler.timezone.override + zoom.stealth.fpp.hw_seed are the
+    real ones). Guards against re-introducing a pref the binary ignores."""
+    prefs = translate_profile_to_prefs(generate_profile(seed=42), timezone="America/Chicago")
+    assert "zoom.stealth.timezone" not in prefs
+    assert "zoom.stealth.seed" not in prefs
+    assert prefs["juggler.timezone.override"] == "America/Chicago"
+    assert "zoom.stealth.fpp.hw_seed" in prefs
+
+
+# ──────────────────────────────────────────────────────────────────────────
 #  Fake-proxy infrastructure for e2e: a tiny TCP-only SOCKS5 server.
 # ──────────────────────────────────────────────────────────────────────────
 class _Socks5TcpOnly:

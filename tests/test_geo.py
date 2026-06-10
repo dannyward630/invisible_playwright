@@ -16,6 +16,7 @@ from invisible_playwright._geo import (
     _proxy_is_set,
     discover_egress_ip,
     ip_to_timezone,
+    prepare_session_geo,
     resolve_session_timezone,
 )
 
@@ -286,3 +287,39 @@ def test_resolve_proxy_failure_raises(monkeypatch):
         resolve_session_timezone("auto", SOCKS)
     with pytest.raises(GeoTimezoneError):
         resolve_session_timezone("", SOCKS)
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  prepare_session_geo — one round-trip for BOTH timezone + the WebRTC
+#  egress IP. The egress feeds the srflx override (only behind a proxy).
+# ──────────────────────────────────────────────────────────────────────
+@pytest.mark.unit
+def test_prepare_geo_egress_present_behind_proxy(stub_egress):
+    geo = prepare_session_geo("auto", SOCKS)
+    assert geo.timezone == "America/New_York"
+    assert geo.egress_ip == "203.0.113.7"  # discovered for WebRTC
+    assert stub_egress["proxy_arg"] == SOCKS
+
+
+@pytest.mark.unit
+def test_prepare_geo_egress_present_even_with_explicit_tz(stub_egress):
+    # explicit IANA zone still needs the egress for WebRTC behind a proxy.
+    geo = prepare_session_geo("Asia/Tokyo", SOCKS)
+    assert geo.timezone == "Asia/Tokyo"
+    assert geo.egress_ip == "203.0.113.7"
+    assert stub_egress["called"] is True
+
+
+@pytest.mark.unit
+def test_prepare_geo_no_egress_without_proxy(stub_egress):
+    # no proxy → no WebRTC override (real STUN already tells the truth).
+    geo = prepare_session_geo("auto", None)
+    assert geo.timezone == "America/New_York"
+    assert geo.egress_ip is None
+
+
+@pytest.mark.unit
+def test_prepare_geo_timezone_matches_resolve_session_timezone(stub_egress):
+    # the thin tz wrapper must stay equivalent to prepare_session_geo().timezone
+    for tz, proxy in [("Asia/Tokyo", SOCKS), ("auto", HTTP), ("", None)]:
+        assert prepare_session_geo(tz, proxy).timezone == resolve_session_timezone(tz, proxy)

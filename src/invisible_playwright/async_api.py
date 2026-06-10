@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional, Union
 from playwright.async_api import Browser, BrowserContext, Playwright, async_playwright
 
 from ._fpforge import Profile, generate_profile
-from ._geo import resolve_session_timezone
+from ._geo import prepare_session_geo
 from ._headless import make_virtual_display
 from ._proxy import configure_proxy as _configure_proxy_shared
 from .download import ensure_binary
@@ -73,16 +73,20 @@ class InvisiblePlaywright:
         self._browser: Optional[Browser] = None
         self._persistent_context: Optional[BrowserContext] = None
         self._virtual_display: Any = None
+        # Proxy egress IP (WebRTC srflx override); discovered in __aenter__.
+        self._webrtc_egress_ip: Optional[str] = None
 
     async def __aenter__(self) -> Union[Browser, BrowserContext]:
         import sys as _sys
-        # Resolve timezone="auto" (and the proxy-set-but-unset default) to a
-        # concrete IANA zone before anything reads self._timezone. Run the
-        # blocking geo lookup off the event loop. Fail-early if a proxy is set
-        # but the egress zone can't be resolved.
-        self._timezone = await asyncio.to_thread(
-            resolve_session_timezone, self._timezone, self._proxy
+        # Resolve timezone="auto" AND discover the proxy egress IP in one
+        # round-trip, off the event loop, before anything reads self._timezone
+        # or builds prefs/env. Fail-early if a proxy is set but the egress
+        # can't be resolved.
+        _geo = await asyncio.to_thread(
+            prepare_session_geo, self._timezone, self._proxy
         )
+        self._timezone = _geo.timezone
+        self._webrtc_egress_ip = _geo.egress_ip
         executable = self._binary_path or ensure_binary()
         prefs = translate_profile_to_prefs(
             self._profile,
@@ -203,12 +207,16 @@ class InvisiblePlaywright:
         env = _os.environ.copy()
         if self._timezone:
             env["TZ"] = _tz_env(self._timezone)
-        # Propagate STEALTHFOX_WEBRTC_PUBLIC_IP if the process set it — read
-        # by nICEr's nr_stealth_bridge to inject a synthetic srflx candidate
-        # matching the proxy egress IP. This avoids the StaticPref IPC
-        # propagation timing issue between parent and socket processes.
-        if _os.environ.get("STEALTHFOX_WEBRTC_PUBLIC_IP"):
-            env["STEALTHFOX_WEBRTC_PUBLIC_IP"] = _os.environ["STEALTHFOX_WEBRTC_PUBLIC_IP"]
+        # WebRTC srflx override: feed nICEr's nr_stealth_bridge the proxy egress
+        # IP (caller's explicit env var wins, else the IP auto-discovered in
+        # __aenter__) and drop IPv6 from gathering behind a proxy.
+        webrtc_ip = (
+            _os.environ.get("STEALTHFOX_WEBRTC_PUBLIC_IP")
+            or self._webrtc_egress_ip
+        )
+        if webrtc_ip:
+            env["STEALTHFOX_WEBRTC_PUBLIC_IP"] = webrtc_ip
+            env["STEALTHFOX_WEBRTC_DISABLE_IPV6"] = "1"
         return env
 
     def _resolve_headless(self) -> bool:

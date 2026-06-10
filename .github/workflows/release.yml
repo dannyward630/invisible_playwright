@@ -377,12 +377,14 @@ jobs:
           TAG="${{ github.event.inputs.release_tag }}"
           [ -z "$TAG" ] && TAG="${GITHUB_REF_NAME}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          # bare revision number for the release title: firefox-9 -> 9
+          echo "num=${TAG#firefox-}" >> "$GITHUB_OUTPUT"
           echo "publishing DRAFT release for tag: $TAG"
       - name: Create DRAFT release with all assets
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
-          name: invisible_firefox (150.0.1) rev ${{ steps.tag.outputs.tag }}
+          name: invisible_firefox (150.0.1) rev ${{ steps.tag.outputs.num }}
           draft: true
           prerelease: false
           fail_on_unmatched_files: true

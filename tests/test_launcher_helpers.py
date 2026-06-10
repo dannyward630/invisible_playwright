@@ -169,3 +169,38 @@ def test_default_context_includes_locale_when_set():
 def test_default_context_omits_locale_when_empty():
     ip = InvisiblePlaywright(seed=42, locale="")
     assert "locale" not in ip._default_context_kwargs()
+
+
+# ── InvisiblePlaywright._build_env — WebRTC egress auto-derive ─────────
+# Locks the 2026-06-10 fix: behind a proxy the launcher feeds the discovered
+# egress IP to nICEr (srflx override) + drops IPv6. Without it, a proxied
+# session's WebRTC silently fell back to leaking/blocking. Runs in tests.yml.
+
+
+@pytest.mark.unit
+def test_build_env_injects_webrtc_egress_when_discovered():
+    ip = InvisiblePlaywright(seed=42)
+    ip._webrtc_egress_ip = "203.0.113.9"  # what __enter__ resolves behind a proxy
+    env = ip._build_env()
+    assert env["STEALTHFOX_WEBRTC_PUBLIC_IP"] == "203.0.113.9"
+    assert env["STEALTHFOX_WEBRTC_DISABLE_IPV6"] == "1"
+
+
+@pytest.mark.unit
+def test_build_env_no_webrtc_keys_without_proxy(monkeypatch):
+    monkeypatch.delenv("STEALTHFOX_WEBRTC_PUBLIC_IP", raising=False)
+    ip = InvisiblePlaywright(seed=42)
+    ip._webrtc_egress_ip = None  # no proxy → real STUN already truthful
+    env = ip._build_env()
+    assert "STEALTHFOX_WEBRTC_PUBLIC_IP" not in env
+    assert "STEALTHFOX_WEBRTC_DISABLE_IPV6" not in env
+
+
+@pytest.mark.unit
+def test_build_env_caller_env_override_wins(monkeypatch):
+    monkeypatch.setenv("STEALTHFOX_WEBRTC_PUBLIC_IP", "198.51.100.5")
+    ip = InvisiblePlaywright(seed=42)
+    ip._webrtc_egress_ip = "203.0.113.9"  # auto-discovered
+    env = ip._build_env()
+    assert env["STEALTHFOX_WEBRTC_PUBLIC_IP"] == "198.51.100.5"  # caller wins
+    assert env["STEALTHFOX_WEBRTC_DISABLE_IPV6"] == "1"

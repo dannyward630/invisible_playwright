@@ -48,7 +48,6 @@ _REQUIRED_PREFS_KEYS = (
     "intl.accept_languages",
     "general.useragent.locale",
     "intl.locale.requested",
-    "zoom.stealth.seed",
     "zoom.stealth.fpp.hw_seed",
     "zoom.stealth.webrtc.host_ip",
     "zoom.stealth.webgl.renderer",

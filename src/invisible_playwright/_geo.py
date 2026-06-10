@@ -22,7 +22,7 @@ On failure:
 from __future__ import annotations
 
 import ipaddress
-from typing import Any, Dict, Optional
+from typing import Any, Dict, NamedTuple, Optional
 from urllib.parse import quote
 
 import requests
@@ -136,22 +136,76 @@ def ip_to_timezone(ip: str, mmdb_path: Any) -> str:
     return tz
 
 
+class SessionGeo(NamedTuple):
+    """Geo facts resolved once per session from a single egress round-trip.
+
+    ``timezone`` follows the precedence in the module docstring.
+    ``egress_ip`` is the proxy egress IP (the IP the *outside world* sees) when
+    a proxy is set, else ``None`` — it feeds the WebRTC srflx override, which is
+    only meaningful behind a proxy (a direct connection's real STUN already
+    reports the truthful public IP, so we leave it alone).
+    """
+
+    timezone: str
+    egress_ip: Optional[str]
+
+
+def prepare_session_geo(
+    timezone: str, proxy: Optional[Dict[str, str]]
+) -> SessionGeo:
+    """Resolve the session timezone AND the proxy egress IP in ONE round-trip.
+
+    The egress IP is discovered once and reused for both the timezone mapping
+    (when ``timezone`` is ``""``/``"auto"``) and the WebRTC public-IP override.
+    Timezone precedence is identical to :func:`resolve_session_timezone`; the
+    egress IP is best-effort for the WebRTC side (a discovery failure that the
+    timezone path doesn't need won't break the launch — but if the timezone
+    path *does* need it behind a proxy, that path still fails loudly).
+    """
+    from .download import ensure_geoip_mmdb
+
+    tz = (timezone or "").strip()
+    proxy_set = _proxy_is_set(proxy)
+
+    # One discovery, reused below. Behind a proxy we always want the egress IP
+    # (for WebRTC) regardless of the timezone setting.
+    egress_ip: Optional[str] = None
+    egress_err: Optional[Exception] = None
+    if proxy_set:
+        try:
+            egress_ip = discover_egress_ip(proxy)
+        except Exception as exc:  # noqa: BLE001
+            egress_err = exc
+
+    # Timezone resolution — same precedence as resolve_session_timezone.
+    if tz and tz.lower() != "auto":
+        return SessionGeo(tz, egress_ip)  # explicit IANA wins
+    try:
+        ip = egress_ip if proxy_set else discover_egress_ip(None)
+        if ip is None:  # proxy set but discovery failed above
+            raise egress_err or GeoTimezoneError("egress IP discovery failed")
+        return SessionGeo(ip_to_timezone(ip, ensure_geoip_mmdb()), egress_ip)
+    except Exception:
+        if proxy_set:
+            raise  # fail-early behind a proxy (timezone_mismatch trap)
+        return SessionGeo("", None)  # no proxy: host TZ is a safe fallback
+
+
 def resolve_session_timezone(
     timezone: str, proxy: Optional[Dict[str, str]]
 ) -> str:
     """Map the user's ``timezone`` setting to a concrete IANA zone (or ``""``).
 
-    See the module docstring for the full precedence table. ``""``/``"auto"``
-    ALWAYS resolve from the egress IP (proxy egress if a proxy is set, else the
-    host's own public IP). On failure: with a proxy we raise
-    :class:`GeoTimezoneError` (never silently use the host TZ behind a foreign
-    proxy); without a proxy we fall back to ``""`` (host TZ) so a transient
-    lookup failure can't break the launch.
+    Timezone-only path (no WebRTC side effects): an explicit IANA zone wins and
+    triggers NO network call; ``""``/``"auto"`` resolve from the egress IP. The
+    launch path uses :func:`prepare_session_geo` instead (which additionally
+    returns the egress IP for WebRTC); this standalone resolver is kept for
+    third-party integrations that only want the zone. See the module docstring
+    for the precedence table.
     """
     tz = (timezone or "").strip()
     if tz and tz.lower() != "auto":
-        return tz  # explicit IANA wins
-    # "" or "auto" → always resolve from the egress IP.
+        return tz  # explicit IANA wins — no egress lookup
     from .download import ensure_geoip_mmdb
 
     proxy_set = _proxy_is_set(proxy)

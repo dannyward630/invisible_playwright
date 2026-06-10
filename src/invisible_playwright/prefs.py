@@ -208,15 +208,21 @@ _BASELINE: Dict[str, Any] = {
     "privacy.fingerprintingProtection.pbmode":                       False,
     "privacy.fingerprintingProtection.remoteOverrides.enabled":      False,
 
-    # WebRTC: enabled, no public IP leak.
-    # obfuscate_host_addresses=false: our C++ injection handles candidate
-    # selection; mDNS causes mDNS-IPC to hang in sandboxed content processes.
-    # disableIPv6=true keeps IPv6 out of gathering (less entropy, no IPv6 leak).
+    # WebRTC: enabled, looks like a real Firefox behind NAT, no real-IP leak.
+    # obfuscate_host_addresses=true → host candidate is `<uuid>.local` mDNS,
+    #   exactly like vanilla Firefox (BrowserLeaks "No Leak", Local IP "-").
+    #   The mDNS-IPC hang feared on older builds does NOT reproduce on FF150.
+    # The proxy-egress srflx is injected by our C++ (srflx swap §17 + fallback
+    #   §17.B), fed the egress IP via STEALTHFOX_WEBRTC_PUBLIC_IP from
+    #   launcher._build_env (auto-discovered from the proxy).
+    # IPv6: media.peerconnection.ice.disableIPv6 is DEAD on FF150 (read by no
+    #   ICE-gathering code). The real switch is our zoom.stealth.webrtc.disable_ipv6
+    #   (nICEr addrs.cpp filter) + the STEALTHFOX_WEBRTC_DISABLE_IPV6 env.
     "media.peerconnection.enabled":                       True,
     "media.peerconnection.ice.no_host":                   False,
     "media.peerconnection.ice.default_address_only":      False,
-    "media.peerconnection.ice.obfuscate_host_addresses":  False,
-    "media.peerconnection.ice.disableIPv6":               True,
+    "media.peerconnection.ice.obfuscate_host_addresses":  True,
+    "zoom.stealth.webrtc.disable_ipv6":                   True,
     "media.peerconnection.ice.proxy_only":                False,
     "media.peerconnection.ice.relay_only":                False,
     "media.peerconnection.use_document_iceservers":       True,
@@ -551,12 +557,17 @@ def translate_profile_to_prefs(
     prefs["privacy.spoof_english"]     = 0
 
     if timezone:
-        prefs["zoom.stealth.timezone"] = timezone
+        # juggler.timezone.override is the SOLE source of truth read by the C++
+        # timezone chain (BrowsingContext::Attach/DidSet, ContentChild). The old
+        # zoom.stealth.timezone pref was declared in the yaml but read by NO
+        # code — dropped here on 2026-06-10 (see 20-our-patches.md §8).
         prefs["juggler.timezone.override"] = timezone
 
-    # Cross-process seed (canvas noise + DWrite gamma share this).
+    # Cross-process seed (canvas noise + DWrite gamma share this). Only
+    # zoom.stealth.fpp.hw_seed is read by the C++; the old zoom.stealth.seed
+    # alias was never declared in the yaml and read by nothing — dropped
+    # 2026-06-10.
     prefs["zoom.stealth.fpp.hw_seed"] = profile.seed
-    prefs["zoom.stealth.seed"]        = profile.seed
 
     # Synthetic host ICE candidate — injected by C++ when addr_ct==0 (SOCKS5
     # proxy suppresses all local addresses so Firefox can't gather host cands).

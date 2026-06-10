@@ -158,21 +158,22 @@ def test_webgl_extensions_cleared_on_windows(monkeypatch):
 
 
 @pytest.mark.unit
-def test_timezone_set_propagates_to_both_keys():
-    # TZ1
+def test_timezone_set_uses_juggler_pref():
+    # TZ1 — juggler.timezone.override is the sole C++-read timezone pref;
+    # the old zoom.stealth.timezone alias (orphan) must NOT be reintroduced.
     p = generate_profile(seed=42)
     prefs = translate_profile_to_prefs(p, timezone="America/New_York")
-    assert prefs["zoom.stealth.timezone"] == "America/New_York"
     assert prefs["juggler.timezone.override"] == "America/New_York"
+    assert "zoom.stealth.timezone" not in prefs
 
 
 @pytest.mark.unit
-def test_timezone_empty_omits_both_keys():
+def test_timezone_empty_omits_the_key():
     # TZ2
     p = generate_profile(seed=42)
     prefs = translate_profile_to_prefs(p, timezone="")
-    assert "zoom.stealth.timezone" not in prefs
     assert "juggler.timezone.override" not in prefs
+    assert "zoom.stealth.timezone" not in prefs
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -200,10 +201,10 @@ def test_extra_prefs_none_value_deletes_key():
 
 @pytest.mark.unit
 def test_extra_prefs_overrides_existing_key():
-    # EP3
+    # EP3 — override a real baseline key (hw_seed is the live cross-process seed)
     p = generate_profile(seed=42)
-    prefs = translate_profile_to_prefs(p, extra_prefs={"zoom.stealth.seed": 999})
-    assert prefs["zoom.stealth.seed"] == 999
+    prefs = translate_profile_to_prefs(p, extra_prefs={"zoom.stealth.fpp.hw_seed": 999})
+    assert prefs["zoom.stealth.fpp.hw_seed"] == 999
 
 
 @pytest.mark.unit
