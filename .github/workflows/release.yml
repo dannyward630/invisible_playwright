@@ -355,7 +355,7 @@ jobs:
       - name: Cloak + WebGL-masking guards (headed)
         shell: bash
         run: |
-          python -m pip install --quiet -e .
+          python -m pip install --quiet ".[dev]"
           INVPW_BINARY_PATH="$FF_EXE" python -m pytest \
             tests/test_cloak.py \
             "tests/test_fingerprint_surface.py::test_webgl_readpixels_no_masking_signature" \
