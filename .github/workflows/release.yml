@@ -104,6 +104,24 @@ jobs:
           ref: ${{ env.SOURCE_REF }}
           fetch-depth: 1
 
+      # Record which invisible_firefox commit this build came from. The publish
+      # job turns the range previous-release..this commit into the release notes
+      # (scripts/gen_release_notes.py), and re-publishes it as a source-commit.txt
+      # asset so the NEXT release knows where to start the changelog. One leg is
+      # enough — all legs check out the same SOURCE_REF.
+      - name: Record source commit (for auto release notes)
+        if: matrix.leg == 'linux-x86_64'
+        shell: bash
+        run: git rev-parse HEAD > source-commit.txt && cat source-commit.txt
+      - name: Upload source-commit artifact
+        if: matrix.leg == 'linux-x86_64'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: source-commit
+          path: source-commit.txt
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with: { python-version: '3.11' }
@@ -373,9 +391,18 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout wrapper (for scripts/gen_release_notes.py)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with: { fetch-depth: 1 }
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with: { python-version: '3.11' }
       - name: Download all build assets
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with: { pattern: asset-*, path: dl, merge-multiple: true }
+      - name: Download source-commit metadata
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with: { name: source-commit, path: src-meta }
       - name: Assert all 5 target archives present (no silent partial release)
         run: |
           cd dl
@@ -402,9 +429,38 @@ jobs:
           TAG="${{ github.event.inputs.release_tag }}"
           [ -z "$TAG" ] && TAG="${GITHUB_REF_NAME}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          # bare revision number for the release title: firefox-9 -> 9
-          echo "num=${TAG#firefox-}" >> "$GITHUB_OUTPUT"
+          # bare revision number for the release title: firefox-10 -> 10
+          N="${TAG#firefox-}"
+          echo "num=$N" >> "$GITHUB_OUTPUT"
+          # previous release tag, for the changelog range (firefox-10 -> firefox-9)
+          case "$N" in (*[!0-9]*|'') echo "prevtag=" >> "$GITHUB_OUTPUT";;
+                        (*) echo "prevtag=firefox-$((N-1))" >> "$GITHUB_OUTPUT";; esac
           echo "publishing DRAFT release for tag: $TAG"
+      - name: Build release notes from the source commits
+        id: notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          CUR="$(cat src-meta/source-commit.txt 2>/dev/null | tr -d '[:space:]')"
+          echo "this build's source commit: ${CUR:-<none>}"
+          # previous release's recorded source commit — gives the changelog range.
+          # Missing (first automated notes / firefox-0) -> notes omit the changelog.
+          PREV=""
+          PREVTAG="${{ steps.tag.outputs.prevtag }}"
+          if [ -n "$PREVTAG" ] && gh release download "$PREVTAG" -R "${{ github.repository }}" \
+               --pattern source-commit.txt --dir prev 2>/dev/null; then
+            PREV="$(cat prev/source-commit.txt | tr -d '[:space:]')"
+            echo "previous ($PREVTAG) source commit: $PREV"
+          else
+            echo "no previous source-commit.txt — changelog section omitted this time"
+          fi
+          python scripts/gen_release_notes.py --tag "${{ steps.tag.outputs.tag }}" \
+            --current "$CUR" --prev-sha "$PREV" --source-repo "${{ env.SOURCE_REPO }}" > body.md
+          echo "----- generated body.md -----"; cat body.md
+          # publish THIS build's source commit so the next release can diff from it
+          cp src-meta/source-commit.txt dl/source-commit.txt
       - name: Create DRAFT release with all assets
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
@@ -417,13 +473,7 @@ jobs:
             dl/*.tar.gz
             dl/*.zip
             dl/checksums.txt
-          body: |
-            Patched Firefox 150.0.1 — built on GitHub Actions ($0, no mold).
-            Targets: linux-x86_64, linux-arm64, win-x86_64, macos-arm64, macos-x86_64.
-
-            DRAFT — do not publish until validate_release.py + realness gate pass on all archives.
-
-            macOS: ad-hoc signed (not notarized). After download run:
-              xattr -dr com.apple.quarantine Firefox.app
+            dl/source-commit.txt
+          body_path: body.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
