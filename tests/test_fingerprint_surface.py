@@ -236,3 +236,69 @@ def test_fpscanner_no_userAgentData_on_firefox(page):
     """navigator.userAgentData is Chromium-only. Presence on Firefox UA = bot."""
     if "Firefox" in _ev(page, "navigator.userAgent"):
         assert not _ev(page, "'userAgentData' in navigator")
+
+
+# ===========================================================================
+# WebGL masking-detector guard (pixelscan getFixedRedBox / webglHash)
+#
+# pixelscan flags "fingerprint masking" on the WebGL readPixels output. We
+# reproduce ITS probe locally (the fingerprintjs gradient triangle) and check
+# the structural signature it keys on: our stealth readPixels noise MUST be a
+# coherent, monotonic gamma remap (smooth, ~0 spikes), NOT isolated +-1 flips
+# (which read as unnatural high-frequency noise and were flagged as masking).
+# This is the CI-safe local stand-in for pixelscan's server-side check; it
+# guards the gamma fix from ever silently regressing to the +-1 algorithm.
+# ===========================================================================
+
+_WEBGL_MASKING_PROBE = """() => {
+  const c = document.createElement('canvas');
+  const gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+  if (!gl) return { error: 'no-webgl' };
+  const vs = 'attribute vec2 a;uniform vec2 o;varying vec2 v;' +
+             'void main(){v=a+o;gl_Position=vec4(a,0,1);}';
+  const fs = 'precision mediump float;varying vec2 v;' +
+             'void main(){gl_FragColor=vec4(v,0,1);}';
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER,
+    new Float32Array([-0.2,-0.9,0, 0.4,-0.26,0, 0,0.732134444,0]), gl.STATIC_DRAW);
+  const p = gl.createProgram();
+  const s1 = gl.createShader(gl.VERTEX_SHADER); gl.shaderSource(s1, vs); gl.compileShader(s1);
+  const s2 = gl.createShader(gl.FRAGMENT_SHADER); gl.shaderSource(s2, fs); gl.compileShader(s2);
+  gl.attachShader(p, s1); gl.attachShader(p, s2); gl.linkProgram(p); gl.useProgram(p);
+  const loc = gl.getAttribLocation(p, 'a'); gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0);
+  const off = gl.getUniformLocation(p, 'o'); gl.uniform2f(off, 1, 1);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 3);
+  const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+  const px = new Uint8Array(w * h * 4);
+  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  // count small local extrema (|delta|<=3 to both horizontal neighbours, same
+  // sign) — the +-1-noise signature; a smooth/monotonic render has ~none.
+  let spikes = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      for (let ch = 0; ch < 3; ch++) {
+        const i = (y * w + x) * 4 + ch; const val = px[i];
+        if (val === 0) continue;
+        const dl = val - px[i - 4], dr = val - px[i + 4];
+        if (dl * dr > 0 && Math.abs(dl) <= 3 && Math.abs(dr) <= 3) spikes++;
+      }
+    }
+  }
+  return { spikes: spikes, dims: w + 'x' + h };
+}"""
+
+
+@pytest.mark.e2e
+def test_webgl_readpixels_no_masking_signature(page):
+    """Stealth WebGL readPixels noise must be a coherent gamma remap (smooth),
+    not isolated +-1 flips. +-1 noise on the smooth gradient triangle produced
+    ~300+ 'spikes' and pixelscan flagged it as masking; the gamma remap leaves
+    the gradient smooth (~0 spikes). Regression guard for the gamma fix."""
+    res = _ev(page, _WEBGL_MASKING_PROBE)
+    assert "error" not in res, f"WebGL probe failed: {res}"
+    # genuine / gamma -> ~0; the rejected +-1 algorithm produced ~320.
+    assert res["spikes"] < 30, (
+        f"WebGL readPixels shows {res['spikes']} high-frequency noise spikes "
+        f"(pixelscan-maskable); the stealth noise must be a smooth gamma remap."
+    )

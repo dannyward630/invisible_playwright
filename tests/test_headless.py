@@ -1,35 +1,39 @@
-"""Unit tests for the ``_headless`` virtual-display dispatcher.
+"""Unit tests for the ``_headless`` window-hider dispatcher.
 
-The dispatcher (``make_virtual_display``) is the only piece of
-``_headless`` we can exercise as a unit test on a single platform:
-``_WindowsVirtualDesktop`` actually creates a Win32 desktop on
-construction's later ``start()`` call, and ``_LinuxVirtualDisplay`` calls
-``Xvfb`` — both belong in integration/E2E coverage. The dispatcher's
-job is pure platform routing, which we patch via ``monkeypatch``.
+``make_virtual_display`` is pure platform routing:
+- Linux: a ``_LinuxVirtualDisplay`` (Xvfb) object the launcher start()s/stop()s.
+- Windows / macOS: ``None`` — the patched binary self-cloaks its chrome windows
+  via ``cloak_prefs()`` (injected by the launcher), so nothing host-side spawns.
+- Anything else: a clear ``RuntimeError`` naming the platform.
 
-Per scope: Windows-specific + platform-agnostic only. We still cover
-the Linux dispatch branch because instantiating ``_LinuxVirtualDisplay``
-does no I/O — Xvfb is only spawned in ``start()``, which we never call.
+``_LinuxVirtualDisplay`` construction does no I/O (Xvfb is only spawned in
+``start()``), so it's safe to exercise on any host.
 """
 from __future__ import annotations
-
-import sys
 
 import pytest
 
 import invisible_playwright._headless as headless
 from invisible_playwright._headless import (
+    CLOAK_PREFS,
     _LinuxVirtualDisplay,
-    _WindowsVirtualDesktop,
+    cloak_prefs,
     make_virtual_display,
 )
 
 
 @pytest.mark.unit
-def test_make_virtual_display_returns_windows_desktop_on_win32(monkeypatch):
+def test_make_virtual_display_returns_none_on_win32(monkeypatch):
+    """Windows hides via the in-binary cloak pref, not a host-side display."""
     monkeypatch.setattr(headless.sys, "platform", "win32")
-    vd = make_virtual_display()
-    assert isinstance(vd, _WindowsVirtualDesktop)
+    assert make_virtual_display() is None
+
+
+@pytest.mark.unit
+def test_make_virtual_display_returns_none_on_darwin(monkeypatch):
+    """macOS is now supported — it hides via the same in-binary cloak pref."""
+    monkeypatch.setattr(headless.sys, "platform", "darwin")
+    assert make_virtual_display() is None
 
 
 @pytest.mark.unit
@@ -37,8 +41,7 @@ def test_make_virtual_display_returns_linux_xvfb_on_linux(monkeypatch):
     """``__init__`` of ``_LinuxVirtualDisplay`` does no I/O — only ``start()``
     spawns Xvfb. Exercising the dispatcher here is safe on any host."""
     monkeypatch.setattr(headless.sys, "platform", "linux")
-    vd = make_virtual_display()
-    assert isinstance(vd, _LinuxVirtualDisplay)
+    assert isinstance(make_virtual_display(), _LinuxVirtualDisplay)
 
 
 @pytest.mark.unit
@@ -50,20 +53,9 @@ def test_make_virtual_display_accepts_linux_variants(monkeypatch):
 
 
 @pytest.mark.unit
-def test_make_virtual_display_raises_on_darwin(monkeypatch):
-    """macOS is unsupported — the dispatcher must raise with a clear
-    message rather than returning a no-op shim. ``InvisiblePlaywright``
-    relies on this to bail before launching Firefox on a system where
-    the patched binary doesn't exist."""
-    monkeypatch.setattr(headless.sys, "platform", "darwin")
-    with pytest.raises(RuntimeError, match="Windows and Linux only"):
-        make_virtual_display()
-
-
-@pytest.mark.unit
 def test_make_virtual_display_raises_on_unsupported_platform(monkeypatch):
     monkeypatch.setattr(headless.sys, "platform", "freebsd14")
-    with pytest.raises(RuntimeError, match="Windows and Linux only"):
+    with pytest.raises(RuntimeError, match="Windows, macOS and Linux"):
         make_virtual_display()
 
 
@@ -77,32 +69,13 @@ def test_make_virtual_display_error_mentions_offending_platform(monkeypatch):
 
 
 @pytest.mark.unit
-def test_windows_desktop_initial_state_is_clean():
-    """Construction must not allocate Win32 resources — only ``start()``
-    does. Allows users to instantiate ``InvisiblePlaywright`` without
-    pywin32 installed; the import error fires lazily when ``start()`` runs."""
-    vd = _WindowsVirtualDesktop()
-    assert vd._desktop is None
-    assert vd._original_handle == 0
-
-
-@pytest.mark.unit
-@pytest.mark.skipif(sys.platform != "win32", reason="exercises Win32 ctypes")
-def test_windows_desktop_stop_is_idempotent_without_start():
-    """``stop()`` after never calling ``start()`` must be a no-op, so
-    ``__exit__`` from a failed launch can call it unconditionally.
-
-    Skipped off Windows because ``stop()`` unconditionally resolves
-    ``ctypes.windll.user32`` at the top of the function — that symbol
-    only exists on Windows.  The early-return logic is safe because
-    callers only instantiate this class via ``make_virtual_display()``
-    which already routes on ``sys.platform == 'win32'``.
-    """
-    vd = _WindowsVirtualDesktop()
-    vd.stop()
-    vd.stop()
-    assert vd._desktop is None
-    assert vd._original_handle == 0
+def test_cloak_prefs_enables_cloak_and_disables_occlusion():
+    """The cloak prefs must turn on the in-binary cloak and turn OFF Windows
+    occlusion tracking (so a hidden window keeps painting). Returns a copy."""
+    p = cloak_prefs()
+    assert p["zoom.stealth.cloak_windows"] is True
+    assert p["widget.windows.window_occlusion_tracking.enabled"] is False
+    assert p == CLOAK_PREFS and p is not CLOAK_PREFS
 
 
 # ──────────────────────────────────────────────────────────────────────

@@ -9,7 +9,7 @@ from playwright.sync_api import Browser, BrowserContext, Playwright, sync_playwr
 
 from ._fpforge import Profile, generate_profile
 from ._geo import prepare_session_geo
-from ._headless import make_virtual_display
+from ._headless import cloak_prefs, make_virtual_display
 from ._proxy import configure_proxy as _configure_proxy_shared
 from .download import ensure_binary
 from .prefs import translate_profile_to_prefs
@@ -340,6 +340,12 @@ class InvisiblePlaywright:
             extra_prefs=self._extra_prefs,
             virtual_display=bool(self._headless and _sys.platform == "win32"),
         )
+        # Windows & macOS hide the headless window via the binary's own cloak
+        # (DWMWA_CLOAK / NSWindow alpha) — inject the pref so the patched build
+        # cloaks its chrome windows. setdefault: an explicit user override wins.
+        if self._headless and _sys.platform in ("win32", "darwin"):
+            for _k, _v in cloak_prefs().items():
+                prefs.setdefault(_k, _v)
         prefs["invisible_playwright.humanize"] = bool(self._humanize)
         if self._humanize:
             prefs["invisible_playwright.humanize.maxTime"] = str(self._humanize_max_seconds())
@@ -379,15 +385,18 @@ class InvisiblePlaywright:
     def _resolve_headless(self) -> bool:
         """Translate the user's ``headless`` flag.
 
-        When ``True``, we keep Firefox in headed mode (real rendering
-        pipeline → coherent fingerprint) and hide the windows on a fresh
-        Xvfb (Linux) or hidden Windows desktop.
+        When ``True``, Firefox stays in headed mode (real rendering pipeline →
+        coherent fingerprint) and the window is hidden: on Linux via a fresh
+        Xvfb spawned here; on Windows/macOS via the binary's own window cloak
+        (the ``zoom.stealth.cloak_windows`` pref added in ``_build_prefs``), so
+        ``make_virtual_display()`` returns ``None`` and nothing is spawned.
         """
         if not self._headless:
             return False
         vd = make_virtual_display()
-        vd.start()
-        self._virtual_display = vd
+        if vd is not None:
+            vd.start()
+            self._virtual_display = vd
         return False
 
     def _humanize_max_seconds(self) -> float:

@@ -341,6 +341,26 @@ jobs:
         shell: bash
         run: python scripts/ci_drive_gate.py "$FF_EXE" ${{ matrix.extra }}
 
+      # CLOAK + WEBGL-MASKING GUARDS — run the wrapper's e2e cloak/gamma checks
+      # against THIS leg's freshly-built artifact, on its native runner. The
+      # wrapper's headless=True is headed+hidden (cloak on Win/macOS, its own
+      # Xvfb on Linux), so software-GL rendering works on the GPU-less hosts.
+      # test_cloak asserts the window is hidden (Windows DWMWA_CLOAKED / macOS
+      # CGWindowAlpha) AND still renders — the macOS leg is the only place the
+      # cocoa cloak patch gets RUN. The webgl guard catches a regression of the
+      # gamma readPixels noise back to the pixelscan-maskable ±1 spike form.
+      - name: Install pyobjc Quartz (macOS — to read the cloak window alpha)
+        if: matrix.kind == 'mac'
+        run: python -m pip install --quiet pyobjc-framework-Quartz
+      - name: Cloak + WebGL-masking guards (headed)
+        shell: bash
+        run: |
+          python -m pip install --quiet -e .
+          INVPW_BINARY_PATH="$FF_EXE" python -m pytest \
+            tests/test_cloak.py \
+            "tests/test_fingerprint_surface.py::test_webgl_readpixels_no_masking_signature" \
+            -m e2e -o addopts='' -q
+
   publish:
     name: publish-draft-release
     needs: [build, gate]

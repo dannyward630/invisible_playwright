@@ -2,18 +2,23 @@
 
 Playwright's ``headless=True`` flips Firefox onto a different code path —
 no widget tree, software-only rendering, distinct timing — and anti-bot
-systems can spot the divergence. Running the browser *headed* on a
-virtual display gives us the real rendering pipeline while keeping the
-windows off the user's screen.
+systems can spot the divergence. Running the browser *headed* but hidden
+gives us the real rendering pipeline while keeping the windows off screen.
 
-Linux: spawns its own ``Xvfb`` instance, points ``DISPLAY`` at it.
-Windows: creates a hidden desktop via ``CreateDesktop`` and binds the
-calling thread to it, so Playwright's child processes inherit it.
+Two mechanisms, by platform:
+
+- **Windows & macOS**: the patched binary cloaks its OWN chrome windows
+  when ``zoom.stealth.cloak_windows`` is set — ``DWMWA_CLOAK`` (Windows)
+  / ``NSWindow`` alpha-0 + pinned occlusion-ignore (macOS). The window
+  renders on the real GPU but never appears on screen, in the taskbar or
+  the Dock. The launcher injects the pref; nothing host-side is spawned.
+
+- **Linux**: spawns its own ``Xvfb`` instance and points ``DISPLAY`` at
+  it (X11/Wayland have no per-window cloak that keeps the GPU rendering).
 """
 from __future__ import annotations
 
 import os
-import secrets
 import subprocess
 import sys
 import time
@@ -131,95 +136,40 @@ class _LinuxVirtualDisplay:
         self._display = None
 
 
-class _WindowsVirtualDesktop:
-    """A hidden Windows desktop the calling thread is bound to.
+# Windows & macOS: the patched Firefox cloaks its own chrome windows when this
+# pref is set (DWMWA_CLOAK / NSWindow alpha-0 + pinned occlusion-ignore), so the
+# window renders on the real GPU but never shows on screen / in the taskbar or
+# Dock. window_occlusion_tracking is disabled so a hidden window keeps painting.
+CLOAK_PREFS = {
+    "zoom.stealth.cloak_windows": True,
+    "widget.windows.window_occlusion_tracking.enabled": False,
+}
 
-    Playwright's child processes (node driver → firefox.exe) inherit the
-    desktop because their ``STARTUPINFO.lpDesktop`` is NULL — Windows uses
-    the calling thread's desktop in that case.
 
-    pywin32 ships ``CreateDesktop`` in ``win32service`` but doesn't expose
-    ``SetThreadDesktop`` / ``GetThreadDesktop`` as module functions. We
-    call them directly via ctypes against ``user32.dll``.
+def cloak_prefs() -> dict:
+    """Prefs that make the patched binary self-cloak its chrome windows.
+
+    Used on Windows & macOS, where hiding is done inside the binary rather than
+    with a host-side virtual display.
     """
-
-    def __init__(self) -> None:
-        self._desktop = None      # PyHDESK from win32service.CreateDesktop
-        self._original_handle = 0  # raw HDESK int of the previous desktop
-
-    def start(self) -> None:
-        try:
-            import win32con  # type: ignore
-            import win32service  # type: ignore
-        except ImportError as e:
-            raise RuntimeError(
-                "invisible_playwright headless=True on Windows requires pywin32. "
-                "Install it: pip install pywin32"
-            ) from e
-
-        import ctypes
-        from ctypes import wintypes
-        user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
-
-        # Save the current desktop handle so we can restore it on stop().
-        get_thread_desktop = user32.GetThreadDesktop
-        get_thread_desktop.argtypes = [wintypes.DWORD]
-        get_thread_desktop.restype  = wintypes.HANDLE
-        self._original_handle = get_thread_desktop(kernel32.GetCurrentThreadId())
-
-        name = f"sf_{secrets.token_hex(4)}"
-        self._desktop = win32service.CreateDesktop(
-            name, 0, win32con.GENERIC_ALL, None
-        )
-
-        # Bind the calling thread to the new desktop. Children spawned
-        # afterwards (Playwright driver → firefox.exe) inherit it because
-        # their STARTUPINFO.lpDesktop is NULL.
-        set_thread_desktop = user32.SetThreadDesktop
-        set_thread_desktop.argtypes = [wintypes.HANDLE]
-        set_thread_desktop.restype  = wintypes.BOOL
-        if not set_thread_desktop(int(self._desktop)):
-            err = ctypes.get_last_error()
-            raise RuntimeError(
-                f"SetThreadDesktop failed (GetLastError={err}). "
-                "The thread cannot have any windows or hooks; close them first."
-            )
-
-    def stop(self) -> None:
-        import ctypes
-        from ctypes import wintypes
-        user32 = ctypes.windll.user32
-
-        if self._original_handle:
-            try:
-                set_thread_desktop = user32.SetThreadDesktop
-                set_thread_desktop.argtypes = [wintypes.HANDLE]
-                set_thread_desktop.restype  = wintypes.BOOL
-                set_thread_desktop(self._original_handle)
-            except Exception:
-                pass
-            self._original_handle = 0
-
-        if self._desktop is not None:
-            try:
-                self._desktop.CloseDesktop()
-            except Exception:
-                pass
-            self._desktop = None
+    return dict(CLOAK_PREFS)
 
 
 def make_virtual_display():
-    """Return a started/stoppable virtual-display object for this platform.
+    """Return a start()/stop()-able virtual display, or ``None`` when the
+    platform hides windows via the in-binary cloak pref instead.
 
-    InvisiblePlaywright supports Windows x86_64 and Linux x86_64 only.
+    - Linux: a fresh ``Xvfb`` (the launcher start()s/stop()s it).
+    - Windows / macOS: ``None`` — the binary self-cloaks via ``cloak_prefs()``,
+      injected by the launcher; nothing host-side needs spawning.
     """
-    if sys.platform == "win32":
-        return _WindowsVirtualDesktop()
     if sys.platform.startswith("linux"):
         return _LinuxVirtualDisplay()
+    if sys.platform in ("win32", "darwin"):
+        return None
     raise RuntimeError(
-        f"invisible_playwright supports Windows and Linux only (got {sys.platform!r})"
+        f"invisible_playwright supports Windows, macOS and Linux "
+        f"(got {sys.platform!r})"
     )
 
 
