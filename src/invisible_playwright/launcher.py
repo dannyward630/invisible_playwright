@@ -346,9 +346,13 @@ class InvisiblePlaywright:
         if self._headless and _sys.platform in ("win32", "darwin"):
             for _k, _v in cloak_prefs().items():
                 prefs.setdefault(_k, _v)
-        prefs["invisible_playwright.humanize"] = bool(self._humanize)
+        # Pref namespace MUST be stealthfox.* — that's what the binary's Juggler
+        # reads (PageHandler.js gates the Bezier mouse path on `stealthfox.humanize`).
+        # The old `invisible_playwright.*` name was a dead no-op (nothing read it), so
+        # humanize silently never fired and every click teleported the cursor.
+        prefs["stealthfox.humanize"] = bool(self._humanize)
         if self._humanize:
-            prefs["invisible_playwright.humanize.maxTime"] = str(self._humanize_max_seconds())
+            prefs["stealthfox.humanize.maxTime"] = str(self._humanize_max_seconds())
         return prefs
 
     def _build_env(self) -> Dict[str, str]:

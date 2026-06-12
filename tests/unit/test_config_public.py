@@ -29,8 +29,8 @@ def test_get_default_stealth_prefs_random_seed_returns_dict():
     assert isinstance(prefs, dict)
     assert len(prefs) > 0
     # humanize toggle is always set explicitly
-    assert "invisible_playwright.humanize" in prefs
-    assert prefs["invisible_playwright.humanize"] is True
+    assert "stealthfox.humanize" in prefs
+    assert prefs["stealthfox.humanize"] is True
 
 
 def test_get_default_stealth_prefs_seed_is_deterministic():
@@ -50,22 +50,22 @@ def test_get_default_stealth_prefs_different_seeds_differ():
 def test_humanize_false_disables_prefs():
     """humanize=False removes the maxTime knob and flips the toggle to False."""
     prefs = get_default_stealth_prefs(seed=42, humanize=False)
-    assert prefs["invisible_playwright.humanize"] is False
-    assert "invisible_playwright.humanize.maxTime" not in prefs
+    assert prefs["stealthfox.humanize"] is False
+    assert "stealthfox.humanize.maxTime" not in prefs
 
 
 def test_humanize_default_sets_max_time_1_5():
     """humanize=True -> default maxTime is 1.5s, stored as string."""
     prefs = get_default_stealth_prefs(seed=42, humanize=True)
-    assert prefs["invisible_playwright.humanize"] is True
-    assert prefs["invisible_playwright.humanize.maxTime"] == "1.5"
+    assert prefs["stealthfox.humanize"] is True
+    assert prefs["stealthfox.humanize.maxTime"] == "1.5"
 
 
 def test_humanize_float_overrides_max_time():
     """Float for humanize is the explicit cap in seconds."""
     prefs = get_default_stealth_prefs(seed=42, humanize=3.0)
-    assert prefs["invisible_playwright.humanize"] is True
-    assert prefs["invisible_playwright.humanize.maxTime"] == "3.0"
+    assert prefs["stealthfox.humanize"] is True
+    assert prefs["stealthfox.humanize.maxTime"] == "3.0"
 
 
 def test_extra_prefs_overlay_takes_precedence():

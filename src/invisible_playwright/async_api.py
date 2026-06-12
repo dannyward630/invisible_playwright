@@ -10,7 +10,7 @@ from playwright.async_api import Browser, BrowserContext, Playwright, async_play
 
 from ._fpforge import Profile, generate_profile
 from ._geo import prepare_session_geo
-from ._headless import make_virtual_display
+from ._headless import cloak_prefs, make_virtual_display
 from ._proxy import configure_proxy as _configure_proxy_shared
 from .download import ensure_binary
 from .launcher import _CHROME_H, _CHROME_W, _TASKBAR_H, _tz_env
@@ -95,10 +95,19 @@ class InvisiblePlaywright:
             extra_prefs=self._extra_prefs,
             virtual_display=bool(self._headless and _sys.platform == "win32"),
         )
-        prefs["invisible_playwright.humanize"] = bool(self._humanize)
+        # Windows & macOS hide the headless window via the binary's own cloak
+        # (DWMWA_CLOAK / NSWindow alpha) — inject the pref so the patched build
+        # cloaks its chrome windows. setdefault: an explicit user override wins.
+        # (Mirrors launcher._build_prefs; the sync path always did this, async
+        # didn't — so async headless=True never cloaked AND crashed below.)
+        if self._headless and _sys.platform in ("win32", "darwin"):
+            for _k, _v in cloak_prefs().items():
+                prefs.setdefault(_k, _v)
+        # stealthfox.* is the namespace the binary's Juggler reads (see launcher.py note).
+        prefs["stealthfox.humanize"] = bool(self._humanize)
         if self._humanize:
             cap = 1.5 if self._humanize is True else float(self._humanize)
-            prefs["invisible_playwright.humanize.maxTime"] = str(cap)
+            prefs["stealthfox.humanize.maxTime"] = str(cap)
         playwright_proxy = _configure_proxy_shared(self._proxy, prefs)
         pw_headless = self._resolve_headless()
         env = self._build_env()
@@ -223,8 +232,13 @@ class InvisiblePlaywright:
         if not self._headless:
             return False
         vd = make_virtual_display()
-        vd.start()
-        self._virtual_display = vd
+        # Linux: Xvfb to start. Windows/macOS: make_virtual_display() returns
+        # None (the binary self-cloaks via cloak_prefs injected in __aenter__),
+        # so there is nothing to start — guarding the None was the missing piece
+        # that made async headless=True crash with AttributeError on Windows.
+        if vd is not None:
+            vd.start()
+            self._virtual_display = vd
         return False
 
 

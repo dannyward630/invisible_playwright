@@ -132,12 +132,9 @@ def test_mouse_move_outside_viewport_does_not_raise(firefox_binary):
 # ────────────────────────────────────────────────────────────────────
 
 
-@pytest.mark.e2e
-def test_humanize_emits_intermediate_moves(firefox_binary):
-    """A long mouse.move from one corner to another should fire several
-    mousemove events on the page when the humanize hook is enabled (which
-    is the StealthFox default)."""
-    with InvisiblePlaywright(seed=42, binary_path=firefox_binary) as browser:
+def _humanize_move_count(firefox_binary, humanize):
+    """Count page mousemove events fired by ONE long mouse.move."""
+    with InvisiblePlaywright(seed=42, binary_path=firefox_binary, humanize=humanize) as browser:
         page = browser.new_page()
         page.goto(_data_url(
             "<div id=d style='width:600px;height:400px' "
@@ -146,8 +143,27 @@ def test_humanize_emits_intermediate_moves(firefox_binary):
         page.mouse.move(10, 10)
         page.evaluate("window.__n = 0")
         page.mouse.move(500, 300)
-        moves = page.evaluate("window.__n")
-        assert moves >= 1, f"expected at least 1 mousemove event, got {moves}"
+        return page.evaluate("window.__n")
+
+
+@pytest.mark.e2e
+def test_humanize_emits_intermediate_moves(firefox_binary):
+    """A long mouse.move must expand into MANY intermediate mousemove events when
+    humanize is on (Bezier), and ~1 (a teleport) when off. We assert the on/off
+    CONTRAST: `moves >= 1` alone was a false-green — a teleport already fires 1 —
+    and that false-green hid a pref-namespace bug (wrapper wrote
+    `invisible_playwright.humanize`, the binary's Juggler reads `stealthfox.humanize`)
+    that left humanize silently dead in production. This test now fails if the
+    pref ever stops reaching the binary."""
+    on = _humanize_move_count(firefox_binary, True)
+    off = _humanize_move_count(firefox_binary, False)
+    assert off <= 2, f"humanize OFF should ~teleport (<=2 moves), got {off}"
+    assert on >= 4, (
+        f"humanize ON must expand into many intermediate moves (Bezier); got {on} "
+        f"(off={off}). moves==1 means the cursor teleports — the exact automation "
+        f"tell humanize exists to remove, and a sign the stealthfox.* pref isn't "
+        f"reaching the binary's Juggler."
+    )
 
 
 # ────────────────────────────────────────────────────────────────────

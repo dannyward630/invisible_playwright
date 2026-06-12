@@ -91,10 +91,11 @@ def get_default_stealth_prefs(
         extra_prefs=extra_prefs,
         virtual_display=virtual_display,
     )
-    prefs["invisible_playwright.humanize"] = bool(humanize)
+    # stealthfox.* is the namespace the binary's Juggler reads (see launcher.py note).
+    prefs["stealthfox.humanize"] = bool(humanize)
     if humanize:
         max_seconds = float(humanize) if not isinstance(humanize, bool) else 1.5
-        prefs["invisible_playwright.humanize.maxTime"] = str(max_seconds)
+        prefs["stealthfox.humanize.maxTime"] = str(max_seconds)
     return prefs
 
 
