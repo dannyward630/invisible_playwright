@@ -26,7 +26,8 @@ body:
       options:
         - Windows 10/11 x86_64
         - Linux x86_64
-        - macOS (unsupported)
+        - macOS arm64
+        - macOS x86_64
         - Other
     validations:
       required: true
@@ -43,7 +44,7 @@ body:
     id: headless
     attributes:
       label: headless=
-      description: Some bugs only repro on Windows headless=True (hidden alt-desktop path).
+      description: Some bugs only repro with headless=True (hidden-window path on Windows/macOS, Xvfb on Linux).
       options:
         - "True"
         - "False"

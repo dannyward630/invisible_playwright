@@ -25,7 +25,8 @@ body:
       options:
         - Windows 10/11 x86_64
         - Linux x86_64
-        - macOS (unsupported)
+        - macOS arm64
+        - macOS x86_64
         - Other
     validations:
       required: true
