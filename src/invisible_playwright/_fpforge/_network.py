@@ -75,10 +75,23 @@ class Network:
         self.nodes = _topsort(nodes)
         self.by_name = {n.name: n for n in self.nodes}
 
-    def sample(self, rng: random.Random) -> Dict[str, Any]:
+    def sample(
+        self,
+        rng: random.Random,
+        evidence: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Sample the network. ``evidence`` fixes named nodes BEFORE their children
+        sample, so the children RE-CONDITION on the fixed value (not relabel after).
+        Used to pin ``gpu_class`` to the validated WebGL persona's class so the whole
+        bundle (cores/screen/fonts) stays coherent with the GPU we expose. Earlier
+        nodes still sample (RNG stream preserved → per-seed determinism)."""
+        evidence = evidence or {}
         context: Dict[str, Any] = {}
         for node in self.nodes:
-            context[node.name] = node.sample(context, rng)
+            if node.name in evidence:
+                context[node.name] = evidence[node.name]
+            else:
+                context[node.name] = node.sample(context, rng)
         return context
 
 

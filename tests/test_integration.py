@@ -289,8 +289,10 @@ def test_windows_virtual_display_with_socks_proxy(monkeypatch):
     assert prefs["security.sandbox.gpu.level"] == 0  # virtual_display branch
     assert prefs["network.proxy.type"] == 1          # SOCKS branch
     assert prefs["network.proxy.socks"] == "127.0.0.1"
-    # Windows still has the renderer cleared.
-    assert prefs["zoom.stealth.webgl.renderer"] == ""
+    # Windows exposes a validated persona renderer (calibrated clean bucket),
+    # not empty/native — see _webgl_personas.
+    assert prefs["zoom.stealth.webgl.renderer"].startswith("ANGLE (")
+    assert prefs["zoom.stealth.webgl.renderer"].rstrip().endswith(", D3D11)")
 
 
 # ──────────────────────────────────────────────────────────────────────

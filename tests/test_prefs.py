@@ -15,12 +15,18 @@ from invisible_playwright.prefs import (
 
 @pytest.mark.unit
 def test_translate_includes_gpu_renderer_windows(monkeypatch):
-    """On Windows, renderer/vendor are cleared so ANGLE reports native hardware."""
+    """On Windows we falsify the GPU to one of the calibrated CLEAN buckets (FP Pro
+    tampering_ml<=0.5 on every seed; sweep 2026-06-14). Only Radeon R9 200 Series and
+    Intel Arc A750 ship — every NVIDIA/iGPU/945 bucket is penalized. See _webgl_personas."""
     monkeypatch.setattr(sys, "platform", "win32")
+    _CLEAN = {
+        "ANGLE (AMD, AMD Radeon R9 200 Series Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "ANGLE (Intel, Intel(R) Arc(TM) A750 Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    }
     p = generate_profile(seed=42)
     prefs = translate_profile_to_prefs(p)
-    assert prefs["zoom.stealth.webgl.renderer"] == ""
-    assert prefs["zoom.stealth.webgl.vendor"] == ""
+    assert prefs["zoom.stealth.webgl.renderer"] in _CLEAN
+    assert prefs["zoom.stealth.webgl.vendor"] in {"Google Inc. (AMD)", "Google Inc. (Intel)"}
 
 
 @pytest.mark.unit
@@ -82,10 +88,15 @@ def test_accept_language_underscore_normalized():
 
 
 @pytest.mark.unit
-def test_font_metrics_windows_returns_empty(monkeypatch):
-    # FM2: Windows never applies width-scale factors.
+def test_font_metrics_windows_applies_named_factors(monkeypatch):
+    # FM2: Windows/mac apply the per-NAMED-font factors (so whitelisted named
+    # families don't collapse to the list-head width on the canvas measureText
+    # path), but WITHOUT the Linux generic-family compensation (generics bypass
+    # the whitelist and render native there).
     monkeypatch.setattr(sys, "platform", "win32")
-    assert _font_metrics_for_platform("Arial|1.0,Verdana|0.9,") == ""
+    out = _font_metrics_for_platform("Arial|1.0,Verdana|0.9,")
+    assert out == "Arial|1.0,Verdana|0.9,"
+    assert "sans-serif|" not in out  # no generic compensation on Windows
 
 
 @pytest.mark.unit
@@ -100,13 +111,14 @@ def test_font_metrics_empty_input_returns_empty():
 
 
 @pytest.mark.unit
-def test_gpu_renderer_empty_on_windows(monkeypatch):
-    # PG2
+def test_gpu_renderer_persona_on_windows(monkeypatch):
+    # PG2: Windows exposes a validated persona renderer (well-formed ANGLE bucket, NOT empty/native).
     monkeypatch.setattr(sys, "platform", "win32")
     p = generate_profile(seed=42)
     prefs = translate_profile_to_prefs(p)
-    assert prefs["zoom.stealth.webgl.renderer"] == ""
-    assert prefs["zoom.stealth.webgl.vendor"] == ""
+    r = prefs["zoom.stealth.webgl.renderer"]
+    assert r and r.startswith("ANGLE (") and r.rstrip().endswith(", D3D11)")
+    assert prefs["zoom.stealth.webgl.vendor"].startswith("Google Inc. (")
 
 
 @pytest.mark.unit
@@ -143,13 +155,16 @@ def test_canvas_noise_mask_windows_uses_intel_path(monkeypatch):
 
 
 @pytest.mark.unit
-def test_webgl_extensions_cleared_on_windows(monkeypatch):
-    # WE2
+def test_webgl_extensions_persona_on_windows(monkeypatch):
+    # WE2: with a persona active on Windows, extensions are FORCED to the persona's native-order
+    # list (host-independent), NOT cleared. Order is load-bearing (must match the persona verbatim).
     monkeypatch.setattr(sys, "platform", "win32")
+    from invisible_playwright._webgl_personas import select_persona
     p = generate_profile(seed=42)
     prefs = translate_profile_to_prefs(p)
-    assert prefs["zoom.stealth.webgl.extensions"] == ""
-    assert prefs["zoom.stealth.webgl2.extensions"] == ""
+    persona = select_persona(42)
+    assert prefs["zoom.stealth.webgl.extensions"] == persona["ext1"]
+    assert prefs["zoom.stealth.webgl2.extensions"] == persona["ext2"]
 
 
 # ──────────────────────────────────────────────────────────────────────

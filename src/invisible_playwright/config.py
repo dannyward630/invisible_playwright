@@ -38,6 +38,7 @@ import secrets
 from typing import Any, Dict, List, Optional, Union
 
 from ._fpforge import generate_profile
+from ._webgl_personas import forced_gpu_class
 from .prefs import translate_profile_to_prefs
 
 
@@ -83,7 +84,7 @@ def get_default_stealth_prefs(
         ``playwright.firefox.launch()`` or ``launch_persistent_context()``.
     """
     resolved_seed = int(seed) if seed is not None else secrets.randbits(31)
-    profile = generate_profile(resolved_seed, pin=pin)
+    profile = generate_profile(resolved_seed, pin=pin, fixed_gpu_class=forced_gpu_class(resolved_seed))
     prefs = translate_profile_to_prefs(
         profile,
         locale=locale,

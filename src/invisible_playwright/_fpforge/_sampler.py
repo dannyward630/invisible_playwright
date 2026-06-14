@@ -8,7 +8,7 @@ oscpu, webdriver=false, maxTouchPoints=0) is locked by the compiled build.
 
 Graph:
 
-    gpu (root, 444 real Windows ANGLE renderers)
+    gpu (root, 474 real Windows ANGLE renderers)
      │
      └─> gpu_class (deterministic classifier, 6 classes)
           ├─> hw_concurrency       (CPT per class)
@@ -28,7 +28,7 @@ Sampling is deterministic per stealth_seed via a private random.Random.
 import json
 import os
 import re
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from ._network import Network, Node
 
@@ -110,6 +110,16 @@ def classify_gpu(gpu_value: Dict[str, str]) -> str:
 
     if re.search(r"Intel.*HD Graphics (3000|4000|2500)", r):
         return "integrated_old"
+    # Discrete Intel Arc DESKTOP/dGPU cards (A-series / B-series, e.g. A750,
+    # A770, B580) are discrete GPUs (~RTX 3060 tier for A7xx), NOT the
+    # integrated "Arc 130T/140T/Graphics" iGPUs in Core Ultra chips. Route the
+    # discrete SKUs to a coherent discrete-GPU class so the conditioned bundle
+    # (cores, screen, storage) matches a real discrete-GPU machine; A3xx are
+    # entry discrete -> low_end, A5xx/A7xx/Bxxx -> mid_range. Bare "Arc 1x0(T/V)"
+    # integrated names do NOT match and fall through to integrated_modern below.
+    m = re.search(r"Intel.*\bArc(?:\(TM\))?\s+([AB])(\d)\d\d\b", r)
+    if m:
+        return "low_end" if m.group(2) == "3" else "mid_range"
     if re.search(
         r"Intel.*(HD Graphics (4[56]|5\d\d|6\d\d)|UHD Graphics|Graphics Family|Iris|Arc)",
         r,
@@ -328,8 +338,15 @@ class Forge:
         self.seed = int(seed)
         self._rng = random.Random(self.seed)
 
-    def sample(self) -> Dict[str, Any]:
-        bundle = _NETWORK.sample(self._rng)
+    def sample(self, fixed_gpu_class: Optional[str] = None) -> Dict[str, Any]:
+        # fixed_gpu_class pins gpu_class so the WHOLE bundle (cores/screen/fonts) is
+        # drawn coherently for the WebGL persona's class we expose on Windows/mac.
+        # The default (no fix) path calls _NETWORK.sample(rng) with one arg so existing
+        # monkeypatches/tests keep working.
+        if fixed_gpu_class:
+            bundle = _NETWORK.sample(self._rng, evidence={"gpu_class": fixed_gpu_class})
+        else:
+            bundle = _NETWORK.sample(self._rng)
         gpu = bundle["gpu"]
         screen = bundle["screen"]
         audio = bundle["audio"]
@@ -339,7 +356,7 @@ class Forge:
             "stealth_seed": self.seed,
             # Locked identity
             **_LOCKED,
-            # GPU (coherent pair from 444 pool)
+            # GPU (coherent pair from 474 pool)
             "webgl_renderer": gpu["renderer"],
             "webgl_vendor": gpu["vendor"],
             "gpu_class": bundle["gpu_class"],
@@ -392,6 +409,6 @@ class Forge:
         }
 
 
-def sample(seed: int) -> Dict[str, Any]:
-    """Convenience: `Forge(seed).sample()`."""
-    return Forge(seed).sample()
+def sample(seed: int, fixed_gpu_class: Optional[str] = None) -> Dict[str, Any]:
+    """Convenience: `Forge(seed).sample(fixed_gpu_class)`."""
+    return Forge(seed).sample(fixed_gpu_class)

@@ -48,29 +48,21 @@
       },
       {
         "value": 500000,
-        "prob": 0.3
-      },
-      {
-        "value": 1000000,
-        "prob": 0.05
+        "prob": 0.35
       }
     ],
     "[\"integrated_modern\", \"budget\"]": [
-      {
-        "value": 64000,
-        "prob": 0.2
-      },
-      {
-        "value": 128000,
-        "prob": 0.3
-      },
       {
         "value": 256000,
         "prob": 0.3
       },
       {
         "value": 500000,
-        "prob": 0.2
+        "prob": 0.45
+      },
+      {
+        "value": 1000000,
+        "prob": 0.25
       }
     ],
     "[\"integrated_modern\", \"standard\"]": [

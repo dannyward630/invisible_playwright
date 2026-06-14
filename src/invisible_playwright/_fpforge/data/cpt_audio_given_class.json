@@ -1,5 +1,5 @@
 {
-  "_meta": "audio (rate/latency/channels) given gpu_class",
+  "_meta": "audio (rate/latency/channels) given gpu_class. NOTE 2026-06-14: maxChannelCount reflects the OS DEFAULT OUTPUT DEVICE (stereo for the vast majority of users), NOT the GPU — so channels=2 dominates every class (~78-92%) with only a small 6/8 surround tail. The previous tables emitted 45-100% surround on mid/high/workstation, which is unrealistic and lifted FP Pro tampering_ml (surround on a typical consumer profile reads as a coherence anomaly). Rate/latency tuples are unchanged.",
   "table": {
     "integrated_old": [
       {
@@ -26,7 +26,7 @@
           "latency": 30,
           "channels": 2
         },
-        "prob": 0.6
+        "prob": 0.62
       },
       {
         "value": {
@@ -34,7 +34,7 @@
           "latency": 40,
           "channels": 2
         },
-        "prob": 0.25
+        "prob": 0.3
       },
       {
         "value": {
@@ -42,7 +42,7 @@
           "latency": 25,
           "channels": 6
         },
-        "prob": 0.15
+        "prob": 0.08
       }
     ],
     "low_end": [
@@ -52,7 +52,7 @@
           "latency": 40,
           "channels": 2
         },
-        "prob": 0.55
+        "prob": 0.6
       },
       {
         "value": {
@@ -60,7 +60,7 @@
           "latency": 50,
           "channels": 2
         },
-        "prob": 0.3
+        "prob": 0.32
       },
       {
         "value": {
@@ -68,7 +68,7 @@
           "latency": 30,
           "channels": 6
         },
-        "prob": 0.15
+        "prob": 0.08
       }
     ],
     "mid_range": [
@@ -78,23 +78,15 @@
           "latency": 25,
           "channels": 2
         },
-        "prob": 0.45
+        "prob": 0.5
       },
       {
         "value": {
           "rate": 48000,
           "latency": 20,
-          "channels": 6
+          "channels": 2
         },
         "prob": 0.3
-      },
-      {
-        "value": {
-          "rate": 48000,
-          "latency": 20,
-          "channels": 8
-        },
-        "prob": 0.15
       },
       {
         "value": {
@@ -102,7 +94,23 @@
           "latency": 30,
           "channels": 2
         },
-        "prob": 0.1
+        "prob": 0.12
+      },
+      {
+        "value": {
+          "rate": 48000,
+          "latency": 20,
+          "channels": 6
+        },
+        "prob": 0.06
+      },
+      {
+        "value": {
+          "rate": 48000,
+          "latency": 20,
+          "channels": 8
+        },
+        "prob": 0.02
       }
     ],
     "high_end": [
@@ -110,29 +118,21 @@
         "value": {
           "rate": 48000,
           "latency": 15,
-          "channels": 6
+          "channels": 2
         },
-        "prob": 0.3
+        "prob": 0.6
       },
       {
         "value": {
-          "rate": 48000,
-          "latency": 15,
-          "channels": 8
-        },
-        "prob": 0.3
-      },
-      {
-        "value": {
-          "rate": 48000,
+          "rate": 96000,
           "latency": 15,
           "channels": 2
         },
-        "prob": 0.2
+        "prob": 0.18
       },
       {
         "value": {
-          "rate": 96000,
+          "rate": 48000,
           "latency": 15,
           "channels": 6
         },
@@ -140,11 +140,27 @@
       },
       {
         "value": {
+          "rate": 48000,
+          "latency": 15,
+          "channels": 8
+        },
+        "prob": 0.05
+      },
+      {
+        "value": {
+          "rate": 96000,
+          "latency": 15,
+          "channels": 6
+        },
+        "prob": 0.05
+      },
+      {
+        "value": {
           "rate": 96000,
           "latency": 15,
           "channels": 8
         },
-        "prob": 0.1
+        "prob": 0.02
       }
     ],
     "workstation": [
@@ -152,9 +168,25 @@
         "value": {
           "rate": 48000,
           "latency": 10,
+          "channels": 2
+        },
+        "prob": 0.45
+      },
+      {
+        "value": {
+          "rate": 96000,
+          "latency": 10,
+          "channels": 2
+        },
+        "prob": 0.2
+      },
+      {
+        "value": {
+          "rate": 48000,
+          "latency": 10,
           "channels": 8
         },
-        "prob": 0.25
+        "prob": 0.12
       },
       {
         "value": {
@@ -162,7 +194,7 @@
           "latency": 10,
           "channels": 8
         },
-        "prob": 0.3
+        "prob": 0.1
       },
       {
         "value": {
@@ -170,7 +202,7 @@
           "latency": 10,
           "channels": 6
         },
-        "prob": 0.2
+        "prob": 0.08
       },
       {
         "value": {
@@ -178,15 +210,7 @@
           "latency": 10,
           "channels": 8
         },
-        "prob": 0.15
-      },
-      {
-        "value": {
-          "rate": 48000,
-          "latency": 15,
-          "channels": 6
-        },
-        "prob": 0.1
+        "prob": 0.05
       }
     ]
   }

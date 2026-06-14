@@ -178,7 +178,11 @@ def _apply_pins_to_raw(raw: Dict[str, Any], pin: Dict[str, Any]) -> Dict[str, An
     return out
 
 
-def generate_profile(seed: int, pin: Optional[Dict[str, Any]] = None) -> Profile:
+def generate_profile(
+    seed: int,
+    pin: Optional[Dict[str, Any]] = None,
+    fixed_gpu_class: Optional[str] = None,
+) -> Profile:
     """Return a deterministic Profile for the given integer seed.
 
     pin: optional dict of dotted-path keys (e.g. "screen.width", "gpu.renderer")
@@ -215,7 +219,11 @@ def generate_profile(seed: int, pin: Optional[Dict[str, Any]] = None) -> Profile
         for key in pin:
             _validate_pin_key(key)
 
-    raw = _sample_raw(int(seed))
+    # fixed_gpu_class re-conditions the whole bundle on a chosen class (used so the
+    # bundle stays coherent with the validated WebGL persona we expose on Windows/mac).
+    # An explicit gpu.class_tier pin still wins.
+    eff_class = (pin or {}).get("gpu.class_tier") or fixed_gpu_class
+    raw = _sample_raw(int(seed), fixed_gpu_class=eff_class)
     if pin:
         raw = _apply_pins_to_raw(raw, pin)
 

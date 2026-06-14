@@ -45,11 +45,26 @@ def test_classify_gpu_intel_hd_old_buckets(renderer):
     "ANGLE (Intel, Intel(R) HD Graphics 530 Direct3D11)",
     "ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11)",
     "ANGLE (Intel, Intel(R) Iris Xe Graphics Direct3D11)",
-    "ANGLE (Intel, Intel(R) Arc A750 Direct3D11)",
+    # Integrated Arc iGPUs (Core Ultra "Arc 130T/140T/Graphics") stay integrated_modern.
+    "ANGLE (Intel, Intel(R) Arc(TM) 140T GPU Direct3D11)",
 ])
 def test_classify_gpu_intel_modern(renderer):
-    """CG4-CG7 [DT]: modern Intel HD/UHD/Iris/Arc → integrated_modern."""
+    """CG4-CG7 [DT]: modern Intel HD/UHD/Iris + integrated Arc → integrated_modern."""
     assert classify_gpu(_gpu(renderer)) == "integrated_modern"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("renderer,expected", [
+    # Discrete Intel Arc DESKTOP cards are NOT integrated: A5xx/A7xx/Bxxx ~ mid-range
+    # discrete (RTX 3060 tier); A3xx are entry discrete → low_end.
+    ("ANGLE (Intel, Intel(R) Arc(TM) A750 Graphics Direct3D11 vs_5_0 ps_5_0)", "mid_range"),
+    ("ANGLE (Intel, Intel(R) Arc(TM) A770 Graphics Direct3D11)", "mid_range"),
+    ("ANGLE (Intel, Intel(R) Arc(TM) B580 Graphics Direct3D11)", "mid_range"),
+    ("ANGLE (Intel, Intel(R) Arc(TM) A380 Graphics Direct3D11)", "low_end"),
+])
+def test_classify_gpu_intel_arc_discrete(renderer, expected):
+    """Discrete Intel Arc desktop SKUs map to a discrete-GPU class, not integrated."""
+    assert classify_gpu(_gpu(renderer)) == expected
 
 
 @pytest.mark.unit

@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional, Union
 from playwright.sync_api import Browser, BrowserContext, Playwright, sync_playwright
 
 from ._fpforge import Profile, generate_profile
+from ._webgl_personas import forced_gpu_class
 from ._geo import prepare_session_geo
 from ._headless import cloak_prefs, make_virtual_display
 from ._proxy import configure_proxy as _configure_proxy_shared
@@ -178,7 +179,9 @@ class InvisiblePlaywright:
         # persistent profile_dir is in use, respect its existing cookies
         # and DON'T enable pre-seed (the profile owns its own state).
         self._prep_recaptcha = bool(prep_recaptcha) and self._profile_dir is None
-        self._profile: Profile = generate_profile(self.seed, pin=self._pin)
+        self._profile: Profile = generate_profile(
+            self.seed, pin=self._pin, fixed_gpu_class=forced_gpu_class(self.seed)
+        )
         self._pw: Optional[Playwright] = None
         self._browser: Optional[Browser] = None
         self._persistent_context: Optional[BrowserContext] = None
