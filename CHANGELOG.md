@@ -8,11 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 - `timezone="auto"`: the browser timezone is auto-derived from the egress IP. By default (no explicit timezone) it ALWAYS resolves — from the proxy egress when a proxy is set, otherwise from the host's own public IP — so the zone can never disagree with the IP (the classic `timezone_mismatch` signal). An explicit `"Area/City"` is the only way to force a specific zone. On failure: with a proxy the launch raises (no silent host-TZ fallback behind a foreign proxy); without a proxy it falls back to the host TZ so a transient lookup can't break the launch.
-- The egress IP is mapped to its IANA zone with an offline mmdb (`daijro/geoip-all-in-one`). It auto-updates against the upstream weekly rebuild: cached locally, re-checked after `GEOIP_REFRESH_DAYS` (7), older copies pruned, and a stale cache is reused when offline. `STEALTHFOX_GEOIP_MMDB` points at your own `.mmdb` to skip the download.
+- The egress IP is mapped to its IANA zone with an offline mmdb (`daijro/geoip-all-in-one`). It always tracks the upstream weekly rebuild: on every launch the current latest release tag is resolved from the `releases/latest/download` permalink (no GitHub API → no rate limit) and pulled only if newer than the cache, older copies pruned. Offline → the cached copy is reused; never a pinned tag (daijro prunes old releases, so a pin eventually 404s). `STEALTHFOX_GEOIP_MMDB` points at your own `.mmdb` to skip the download.
 - `resolve_session_timezone(timezone, proxy)` and `ensure_geoip_mmdb()` re-exported at the package root (plus `GeoTimezoneError`) so integrations that own their launch can reproduce the resolution.
 - `tests/test_geo.py` (37) + `tests/test_geoip_update.py` (freshness / auto-update / offline fallback) unit tests.
+- Cross-OS render parity (needs `firefox-12`): the same font/canvas/WebGL fingerprint now renders consistently on Windows, Linux and macOS, so a Windows persona looks identical regardless of the host the binary runs on. Each whitelisted font renders a distinct canvas image (font-detection probes that dedup by rendered image keep every name), the standard Windows fonts (Calibri, Franklin Gothic, Gadugi, Javanese Text, Myanmar Text) are always present so the detected font set matches a real Windows install, and the per-seed render-noise leaves a solid-colour reference render byte-exact while still varying real fingerprint renders.
+- GPU persona applied on every platform: Linux/macOS hosts now present a coherent Windows GPU (renderer + WebGL parameters) instead of the host's real adapter; pool re-rooted on a real-device GPU mix.
+- `tests/test_canvas_render_stealth.py`, `tests/test_webgl_noise_active.py` and new `tests/test_sampler.py` cases: regression guards for per-font canvas distinctness, solid-readback purity under render-noise, and the always-present standard-font invariant.
 
 ### Changed
+- Pins `BINARY_VERSION = firefox-12` (the build with the cross-OS render-parity patches).
 - New runtime dependencies: `requests[socks]` (SOCKS egress lookup), `maxminddb` (mmdb reader), `tzdata` (IANA database for `zoneinfo`, which Windows lacks).
 
 ## [0.2.0] - 2026-05-28

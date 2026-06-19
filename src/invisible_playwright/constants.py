@@ -7,7 +7,7 @@ bugfixes don't force a multi-hour Firefox rebuild.
 from __future__ import annotations
 
 # Bump this when a new patched Firefox build is released on GitHub.
-BINARY_VERSION: str = "firefox-11"
+BINARY_VERSION: str = "firefox-12"
 
 # Releases known to be broken — ensure_binary() refuses them with a clear error
 # instead of handing the user an unusable binary. firefox-8 was packaged without
@@ -68,11 +68,11 @@ RELEASE_URL_TEMPLATE = (
 # single mmdb (country ISO + coordinates + IANA timezone via tzfpy), rebuilt
 # weekly. GPL-3.0, so we DOWNLOAD it at runtime into the user cache (like the
 # Firefox binary) rather than bundling it into this MIT package. The `-all`
-# variant covers IPv4+IPv6. download.py tracks the LATEST release and refreshes
-# weekly; GEOIP_MMDB_VERSION is only the cold-cache fallback when the GitHub
-# API is unreachable on a machine that has never downloaded the DB.
+# variant covers IPv4+IPv6. download.py NEVER pins a tag (daijro prunes old
+# releases, so a pinned tag eventually 404s): on every launch it resolves the
+# CURRENT latest tag from the `releases/latest/download` permalink (no GitHub
+# API, no rate limit) and pulls it if newer than the cache.
 GEOIP_REPO: str = "daijro/geoip-all-in-one"
-GEOIP_MMDB_VERSION: str = "2026.06.03"
 GEOIP_ASSET: str = "geoip-aio-all.mmdb.zip"
 GEOIP_MMDB_NAME: str = "geoip-aio-all.mmdb"
 GEOIP_RELEASE_URL_TEMPLATE: str = (

@@ -15,18 +15,18 @@ from invisible_playwright.prefs import (
 
 @pytest.mark.unit
 def test_translate_includes_gpu_renderer_windows(monkeypatch):
-    """On Windows we falsify the GPU to one of the calibrated CLEAN buckets (FP Pro
-    tampering_ml<=0.5 on every seed; sweep 2026-06-14). Only Radeon R9 200 Series and
-    Intel Arc A750 ship — every NVIDIA/iGPU/945 bucket is penalized. See _webgl_personas."""
+    """On Windows we falsify the GPU to a real-Firefox GPU from the camoufox-derived pool
+    (prevalence-weighted; full coherent renderer+vendor+params+extensions). The chosen GPU's
+    renderer/vendor are applied verbatim and the renderer is in ANGLE D3D11 wire format."""
     monkeypatch.setattr(sys, "platform", "win32")
-    _CLEAN = {
-        "ANGLE (AMD, AMD Radeon R9 200 Series Direct3D11 vs_5_0 ps_5_0, D3D11)",
-        "ANGLE (Intel, Intel(R) Arc(TM) A750 Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)",
-    }
+    from invisible_playwright._webgl_personas import select_persona
     p = generate_profile(seed=42)
     prefs = translate_profile_to_prefs(p)
-    assert prefs["zoom.stealth.webgl.renderer"] in _CLEAN
-    assert prefs["zoom.stealth.webgl.vendor"] in {"Google Inc. (AMD)", "Google Inc. (Intel)"}
+    persona = select_persona(42)
+    assert prefs["zoom.stealth.webgl.renderer"] == persona["renderer"]
+    assert prefs["zoom.stealth.webgl.renderer"].endswith(", D3D11)")
+    assert prefs["zoom.stealth.webgl.vendor"] == persona["vendor"]
+    assert "Google Inc." in prefs["zoom.stealth.webgl.vendor"]
 
 
 @pytest.mark.unit
@@ -156,15 +156,17 @@ def test_canvas_noise_mask_windows_uses_intel_path(monkeypatch):
 
 @pytest.mark.unit
 def test_webgl_extensions_persona_on_windows(monkeypatch):
-    # WE2: with a persona active on Windows, extensions are FORCED to the persona's native-order
-    # list (host-independent), NOT cleared. Order is load-bearing (must match the persona verbatim).
+    # WE2: with a persona active on Windows, the webgl1/webgl2 extension lists are FORCED to
+    # the chosen GPU's real native-order lists (carried in the persona's coherent `prefs`),
+    # NOT cleared. Order is load-bearing (must match the GPU's real capture verbatim).
     monkeypatch.setattr(sys, "platform", "win32")
     from invisible_playwright._webgl_personas import select_persona
     p = generate_profile(seed=42)
     prefs = translate_profile_to_prefs(p)
     persona = select_persona(42)
-    assert prefs["zoom.stealth.webgl.extensions"] == persona["ext1"]
-    assert prefs["zoom.stealth.webgl2.extensions"] == persona["ext2"]
+    assert prefs["zoom.stealth.webgl.extensions"] == persona["prefs"]["zoom.stealth.webgl.extensions"]
+    assert prefs["zoom.stealth.webgl2.extensions"] == persona["prefs"]["zoom.stealth.webgl2.extensions"]
+    assert prefs["zoom.stealth.webgl.extensions"]  # non-empty (a real GPU's ext list)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -413,14 +415,18 @@ def test_font_metrics_linux2_variant_uses_linux_branch(monkeypatch):
 
 @pytest.mark.unit
 def test_gpu_renderer_set_from_profile_on_linux(monkeypatch):
-    # PG1: on Linux we spoof to the profile's Windows-ANGLE renderer
-    # string so cross-platform sessions present a consistent Windows GPU.
+    # PG1: on Linux (as on EVERY host) we apply the camoufox-derived Windows-ANGLE GPU persona,
+    # so the page sees a consistent Windows GPU (rule: always look Windows). The C++ WebGL
+    # override is platform-independent (SanitizeRenderer is pure string regex), so the same
+    # persona renderer/vendor is presented on Linux too — no more "Generic Renderer".
     monkeypatch.setattr(sys, "platform", "linux")
+    from invisible_playwright._webgl_personas import select_persona
     p = generate_profile(seed=42)
     prefs = translate_profile_to_prefs(p)
-    assert prefs["zoom.stealth.webgl.renderer"] == p.gpu.renderer
-    assert prefs["zoom.stealth.webgl.vendor"] == p.gpu.vendor
-    assert prefs["zoom.stealth.webgl.renderer"]  # non-empty
+    persona = select_persona(42)
+    assert prefs["zoom.stealth.webgl.renderer"] == persona["renderer"]
+    assert prefs["zoom.stealth.webgl.renderer"].endswith(", D3D11)")
+    assert prefs["zoom.stealth.webgl.vendor"] == persona["vendor"]
 
 
 @pytest.mark.unit
@@ -465,8 +471,10 @@ def test_canvas_noise_mask_intel_on_linux(monkeypatch):
 
 @pytest.mark.unit
 def test_canvas_noise_mask_nvidia_on_linux(monkeypatch):
-    # CN2: NVIDIA/AMD renderer → 1/8 noise (mask=7). The "intel" substring
-    # check must NOT match here.
+    # CN2: the canvas-noise mask follows the REAL HOST GPU (the canvas is drawn by real
+    # hardware, NOT the exposed persona), so it is the Intel-class 1/16 rate (mask=15) on the
+    # dev/test host even when an NVIDIA persona is exposed — the persona vendor does NOT drive
+    # the noise rate anymore (would over-noise on an Intel host).
     monkeypatch.setattr(sys, "platform", "linux")
     p = generate_profile(
         seed=42,
@@ -476,7 +484,7 @@ def test_canvas_noise_mask_nvidia_on_linux(monkeypatch):
         },
     )
     prefs = translate_profile_to_prefs(p)
-    assert prefs["zoom.stealth.canvas.noise_skip_mask"] == 7
+    assert prefs["zoom.stealth.canvas.noise_skip_mask"] == 15
 
 
 @pytest.mark.unit

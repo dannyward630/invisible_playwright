@@ -76,6 +76,16 @@ _CPT_CODEC = _load("cpt_codec_given_class.json")["table"]
 _CPT_AUDIO = _load("cpt_audio_given_class.json")["table"]
 _INDEP = _load("priors_independent.json")
 _FONT_POOL = _load("font_pool.json")
+# hardwareConcurrency: grounded in the REAL Windows marginal (browserforge Windows UAs).
+# cores are OS-level, ~independent of GPU given the OS (browserforge confirms), so this is a
+# root marginal — NOT conditioned on gpu_class/intra_tier. Fixes the old CPT over-representing
+# 6 cores (~28% vs real ~2%). NB: screen size + dpr are intentionally LEFT on their existing
+# nodes (user 2026-06-18: "non modificare dpr e le size degli screen, rompono sempre").
+_CORES_MARGINAL = [
+    {"value": int(e["value"]), "prob": e["prob"]}
+    for e in _load("win_hw_marginals.json")["cores"]
+    if 2 <= int(e["value"]) <= 64 and e["prob"] >= 0.004
+]
 # Each entry is a dict {"name": "<lowercase family>", "factor": float}.
 # - name: the font family advertised to the page.
 # - factor: per-family width scale used by the consumer to make the family
@@ -83,7 +93,13 @@ _FONT_POOL = _load("font_pool.json")
 # Core = always-included; Optional = sampled with P(font | gpu_class).
 _FONT_CORE: list = _FONT_POOL["core"]
 _FONT_OPTIONAL: list = _FONT_POOL["optional"]
-_CPT_FONTS_OPT = _load("cpt_fonts_optional_given_class.json")["table"]
+_CPT_FONTS_OPT = _load("cpt_fonts_optional_given_class.json")["table"]  # legacy (per-font sampling, superseded by profiles)
+# Realistic Windows font PROFILES (2026-06-18): each = a real machine's optional-font set
+# (validated to NOT over-claim on FP Pro). Profile-level variation (machines differ in
+# Office/extra fonts) instead of per-font random sampling, which produced unrealistic
+# combinations (exotic fonts -> FP Pro over-detection -> tampering_ml tell).
+_FONT_PROFILES: list = _FONT_POOL.get("profiles", [])
+_OPT_BY_NAME = {e["name"]: e for e in _FONT_OPTIONAL}
 # Browsing-history pool + CPT (per-class probabilities for visited sites).
 # Drives _recaptcha_seed's cookie pre-seed: each persona ends up with a
 # coherent list of ~15-30 visited sites whose categories correlate with
@@ -213,9 +229,10 @@ _NETWORK = Network([
     # larger SSD, higher-res screen than a 'budget' mid_range user. Without
     # this, hwc/screen/storage would be independent given gpu_class (noisy).
     Node("intra_tier", parents=["gpu_class"], cpt=_cpt_from_table(_CPT_INTRA_TIER)),
-    # hwc/screen/storage now jointly coherent via (gpu_class, intra_tier).
-    Node("hw_concurrency", parents=["gpu_class", "intra_tier"],
-         cpt=_cpt_from_table(_CPT_HWC)),
+    # hw_concurrency: REAL Windows marginal (root, OS-level, not GPU-conditioned). screen +
+    # storage stay jointly coherent via (gpu_class, intra_tier) — screen size deliberately
+    # unchanged (user: dpr + screen sizes break things; leave them).
+    Node("hw_concurrency", parents=[], cpt=_CORES_MARGINAL),
     Node("screen", parents=["gpu_class", "intra_tier"],
          cpt=_cpt_from_table(_CPT_SCREEN)),
     # Derive screen_tier from screen for msaa parent lookup.
@@ -253,9 +270,10 @@ _NETWORK = Network([
 def derive_font_prefs(gpu_class: str, rng) -> Dict[str, str]:
     """Build COHERENT whitelist + metrics strings for the session.
 
-    Sampling:
-      - Core fonts always included.
-      - Optional fonts sampled with P(font | gpu_class) from the CPT table.
+    Profile-based (not per-font random):
+      - Core fonts always included (OS defaults + CSS-generic backers).
+      - Optional fonts come from ONE realistic Windows profile picked per seed
+        (weighted, deterministic). Metrics carry REAL per-family widths.
 
     Returns:
       {
@@ -275,20 +293,49 @@ def derive_font_prefs(gpu_class: str, rng) -> Dict[str, str]:
     Markers & add-new-font: simply add an entry to font_pool.json:core (with
     a factor at least 4% away from 1.0) — no special-case code needed.
     """
-    cpt = _CPT_FONTS_OPT.get(gpu_class)
-    if cpt is None:
-        cpt = _CPT_FONTS_OPT["integrated_modern"]
-    included: list = list(_FONT_CORE)  # always present
-    for entry in _FONT_OPTIONAL:
-        name = entry["name"]
-        p = cpt.get(name, 0.7)  # default 0.7 if CPT has no row for this font
-        if rng.random() < p:
-            included.append(entry)
+    # Profile-based (2026-06-18): pick ONE realistic Windows font profile (weighted,
+    # deterministic per seed). Per-font random sampling is superseded — it produced
+    # unrealistic optional combinations (exotic fonts) that FP Pro over-detected
+    # (detected-set 26 vs real 20 -> tampering_ml ~0.72). Profiles are validated subsets
+    # of a real machine's set, so the detected-set matches a genuine Windows install.
+    included: list = list(_FONT_CORE)  # core: always present (OS defaults + generic backers)
+    profile = None
+    if _FONT_PROFILES:
+        total = sum(p.get("weight", 1) for p in _FONT_PROFILES)
+        anchor = rng.random() * total
+        cum = 0.0
+        for p in _FONT_PROFILES:
+            cum += p.get("weight", 1)
+            if anchor < cum:
+                profile = p
+                break
+        if profile is None:
+            profile = _FONT_PROFILES[-1]
+    if profile is not None:
+        for name in profile.get("optional", []):
+            entry = _OPT_BY_NAME.get(name)
+            if entry is not None:
+                included.append(entry)
+    else:
+        included.extend(_FONT_OPTIONAL)  # fallback (no profiles defined): all optional
+    # Dedup by name (a profile may list a font that is also in core, e.g. after a
+    # standard font is promoted core→always-present) so the whitelist/metrics never
+    # carry a duplicate family.
+    _seen: set = set()
+    _uniq: list = []
+    for e in included:
+        if e["name"] not in _seen:
+            _seen.add(e["name"])
+            _uniq.append(e)
+    included = _uniq
     # Deterministic ordering: sort by name
     included.sort(key=lambda e: e["name"])
     whitelist = ",".join(e["name"] for e in included)
+    # Emit the UNIVERSAL real Windows width per font (host-independent value, same everywhere).
+    # prefs._font_metrics_for_platform divides by the per-platform collapse base to get the C++
+    # factor (measureText = base * factor = the exact Windows width on Windows/Linux/mac).
     metrics = ",".join(
-        f'{e["name"]}|{e["factor"]:.3f}' for e in included
+        f'{e["name"]}|{e["width"]:.1f}' for e in included
     )
     return {"whitelist": whitelist, "metrics": metrics}
 

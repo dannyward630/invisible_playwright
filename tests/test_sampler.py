@@ -275,6 +275,80 @@ def test_derive_font_whitelist_legacy_shim_matches_dict_form():
         derive_font_prefs("low_end", rng_b)["whitelist"]
 
 
+# Standard fonts that ship with every Windows 10/11 install. They MUST be in the
+# core (always-present) set, never in the optional/per-profile set: a real Windows
+# machine never lacks them, so a session that drops one advertises a font set that
+# doesn't match any real Windows profile (image-dedup font probes then report a
+# short/degenerate name list → server-side OS-font-set checks fail). Calibri in
+# particular sat in `optional` (a bug); these five caused the detected set to come
+# up short on some seeds. Regression guard for the 2026-06-18 optional→core move.
+_STANDARD_WINDOWS_FONTS = [
+    "calibri", "franklin gothic", "gadugi", "javanese text", "myanmar text",
+]
+_ALL_GPU_CLASSES = [
+    "integrated_old", "integrated_modern", "mid_range", "high_end",
+    "low_end", "workstation",
+]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("gpu_class", _ALL_GPU_CLASSES)
+def test_standard_windows_fonts_always_present_every_class_and_seed(gpu_class):
+    """FP7 [regression]: the standard-Windows fonts appear in BOTH whitelist and
+    metrics for every gpu_class across many seeds (i.e. they are core, not
+    profile-optional). Guards against a standard font silently becoming optional."""
+    for seed in range(40):
+        out = derive_font_prefs(gpu_class, random.Random(seed))
+        wl = set(out["whitelist"].split(","))
+        metrics_names = {s.split("|", 1)[0] for s in out["metrics"].split(",")}
+        for font in _STANDARD_WINDOWS_FONTS:
+            assert font in wl, f"{font!r} missing from whitelist (class={gpu_class}, seed={seed})"
+            assert font in metrics_names, f"{font!r} missing from metrics (class={gpu_class}, seed={seed})"
+
+
+@pytest.mark.unit
+def test_standard_windows_fonts_are_in_core_pool():
+    """FP8 [regression]: the standard-Windows fonts live in the CORE pool (not
+    optional) — the structural source of the always-present guarantee above."""
+    core_names = {e["name"] for e in _sampler._FONT_CORE}
+    optional_names = {e["name"] for e in _sampler._FONT_OPTIONAL}
+    for font in _STANDARD_WINDOWS_FONTS:
+        assert font in core_names, f"{font!r} must be in core pool"
+        assert font not in optional_names, f"{font!r} must NOT be in optional pool"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("gpu_class", _ALL_GPU_CLASSES)
+def test_derive_font_prefs_no_duplicate_families(gpu_class):
+    """FP9 [regression]: no family appears twice in whitelist/metrics, even when a
+    profile's optional list also names a core font. Guards the dedup in
+    derive_font_prefs (a duplicate family would emit a malformed pref pair)."""
+    for seed in range(30):
+        out = derive_font_prefs(gpu_class, random.Random(seed))
+        wl = out["whitelist"].split(",")
+        metrics_names = [s.split("|", 1)[0] for s in out["metrics"].split(",")]
+        assert len(wl) == len(set(wl)), f"duplicate in whitelist (class={gpu_class}, seed={seed})"
+        assert len(metrics_names) == len(set(metrics_names)), \
+            f"duplicate in metrics (class={gpu_class}, seed={seed})"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("gpu_class", _ALL_GPU_CLASSES)
+def test_derive_font_prefs_named_fonts_emit_absolute_widths(gpu_class):
+    """FP10 [regression]: every emitted metrics value is a positive number; named
+    (non-generic) fonts carry an ABSOLUTE collapse-target width (>= 10), which the
+    binary self-calibrates per host. A value < 10 here would mean a font slipped
+    through as a bare multiplicative factor and would render at the wrong width."""
+    out = derive_font_prefs(gpu_class, random.Random(3))
+    for entry in out["metrics"].split(","):
+        name, _, val = entry.partition("|")
+        v = float(val.replace("px", ""))
+        assert v > 0.0, f"non-positive metrics value for {name!r}"
+        # the standard named fonts must be absolute (collapse-target) widths
+        if name in _STANDARD_WINDOWS_FONTS:
+            assert v >= 10.0, f"{name!r} emitted as factor {v} (<10), expected absolute width"
+
+
 # ── Forge / sample ──────────────────────────────────────────────────────
 
 # Keys the Forge.sample bundle must always contain. Builds on _LOCKED +

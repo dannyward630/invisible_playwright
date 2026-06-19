@@ -85,53 +85,79 @@ _EXT2 = (
 )
 
 
-def _p(key, renderer, vendor, gpu_class, weight):
-    return {"key": key, "renderer": renderer, "vendor": vendor,
-            "gpu_class": gpu_class, "weight": weight, "ext1": _EXT1, "ext2": _EXT2}
-
-
-# Only the two robustly-clean Windows buckets (calibration sweep 2026-06-14). Both discrete,
-# so gpu_class=mid_range keeps cores/screen coherent with the declared GPU for OTHER detectors
-# (gpu_class does NOT affect tampering_ml). Weights ~ real-world prevalence of the BUCKET:
-# "Radeon R9 200 Series" represents ALL modern AMD (large real slice); "Arc A750" = Intel
-# discrete (rarer). Cross-vendor => the fleet is not a single-GPU cluster.
-_PERSONAS: List[Dict] = [
-    _p("amd_radeon_r9", "ANGLE (AMD, AMD Radeon R9 200 Series Direct3D11 vs_5_0 ps_5_0, D3D11)",
-       "Google Inc. (AMD)", "mid_range", 70),    # -> bucket "Radeon R9 200 Series"; tml 0.03-0.35
-    _p("intel_arc_a750", "ANGLE (Intel, Intel(R) Arc(TM) A750 Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)",
-       "Google Inc. (Intel)", "mid_range", 30),  # -> bucket "Intel(R) Arc(TM) A750 Graphics"; tml 0.02-0.38
-]
-
-_TOTAL_W = sum(p["weight"] for p in _PERSONAS)
-
-# ENABLED: we falsify the GPU on Windows/mac. Validated clean on an Intel Arc host (see the
-# HOST-INDEPENDENCE caveat in the module docstring — unvalidated on non-Arc hosts). On Linux
-# select_persona returns None: there prefs.py spoofs profile.gpu.renderer directly.
+# ── Real-Firefox GPU pool (2026-06-18, supersedes the 2-bucket sweep above) ───────────────
+# The personas are now sourced from `_fpforge/data/webgl_gpu_pool.json` — an OFFLINE extract
+# of camoufox's real-Firefox WebGL telemetry DB (17 Windows GPUs with their REAL per-OS
+# prevalence AND the full coherent WebGL fingerprint: renderer + vendor + extensions +
+# ~100 getParameter values + shader-precision formats). prefs.py applies ALL of these, not
+# just the renderer string. The linchpin A/B (2026-06-18) proved that the OLD "NVIDIA 0/10"
+# verdict was an artifact of spoofing the renderer string over the host's REAL (Arc) params:
+# FP Pro cross-checks renderer<->params, so a GTX 980 string over Arc params mismatched
+# (~0.7-0.85). Injecting camoufox's REAL GTX 980 params makes it coherent (tml median 0.333,
+# flags clean). So the params are NOT vendor-independent (the old assumption) and per-GPU
+# real data is what unlocks the full real GPU mix — including NVIDIA (~47% of real FF-Win),
+# which we no longer gate.
 _ENABLED = True
+_POOL_PATH = __import__("pathlib").Path(__file__).parent / "_fpforge" / "data" / "webgl_gpu_pool.json"
+_GPU_POOL_CACHE: Optional[List[Dict]] = None
+
+
+def _gpu_pool() -> List[Dict]:
+    """Lazy-load the Windows GPU pool (we always claim Windows). Each entry:
+    {key, renderer (input form), vendor, gpu_class (via classify_gpu), prefs (full
+    zoom.stealth.webgl.* override dict), weight (real per-OS prevalence)}."""
+    global _GPU_POOL_CACHE
+    if _GPU_POOL_CACHE is not None:
+        return _GPU_POOL_CACHE
+    import json
+    from ._fpforge._sampler import classify_gpu  # lazy import → no module cycle
+    raw = json.loads(_POOL_PATH.read_text(encoding="utf-8"))
+    pool: List[Dict] = []
+    for e in raw.get("win", []):
+        prefs = e["prefs"]
+        rend_in = prefs["zoom.stealth.webgl.renderer"]
+        cls = classify_gpu({"renderer": rend_in,
+                            "vendor": prefs.get("zoom.stealth.webgl.vendor", "")})
+        pool.append({
+            "key": e.get("renderer_out", rend_in)[:48],
+            "renderer": rend_in,
+            "vendor": prefs["zoom.stealth.webgl.vendor"],
+            "gpu_class": cls,
+            "prefs": prefs,
+            "weight": float(e["prob"]),
+        })
+    _GPU_POOL_CACHE = pool
+    return pool
 
 
 def select_persona(seed: int) -> Optional[Dict]:
-    """Deterministic, prevalence-weighted persona for this seed (None on Linux).
+    """Deterministic, prevalence-weighted GPU persona for this seed — on EVERY host.
 
     Same seed -> same persona (fppro_consistency: identity stable per seed). Different seeds
-    spread across the persona mix by weight. None on Linux (the sampled profile.gpu.renderer
-    is spoofed directly there).
-    """
-    if not _ENABLED or sys.platform.startswith("linux") or not _PERSONAS:
+    spread across the REAL Windows GPU mix by prevalence. Returns the Windows-ANGLE persona on
+    Linux/Mac too: we must always look Windows, and the C++ WebGL override (SanitizeRenderer +
+    pref-driven params/extensions) is platform-independent, so the same Windows GPU is presented
+    on any host without consulting the real GL backend (no more Linux "Generic Renderer")."""
+    if not _ENABLED:
         return None
-    h = (int(seed) * 2654435761) % _TOTAL_W
-    cum = 0
-    for p in _PERSONAS:
+    pool = _gpu_pool()
+    if not pool:
+        return None
+    total = sum(p["weight"] for p in pool) or 1.0
+    h = ((int(seed) * 2654435761) % 1_000_003) / 1_000_003.0 * total
+    cum = 0.0
+    for p in pool:
         cum += p["weight"]
         if h < cum:
             return p
-    return _PERSONAS[-1]
+    return pool[-1]
 
 
 def forced_gpu_class(seed: int) -> Optional[str]:
-    """The gpu_class the forge conditions the WHOLE bundle on (== the selected persona's class),
-    so cores/screen/fonts stay coherent with the GPU we expose. Does NOT affect FP Pro
-    tampering_ml (proven) but matters for detectors that cross-check hardware tier. None on Linux."""
+    """The gpu_class the forge conditions the bundle on (== the selected GPU's class via
+    classify_gpu), so cores/screen/fonts stay coherent with the GPU we expose. Does NOT
+    affect FP Pro tampering_ml (proven) but matters for detectors that cross-check hardware
+    tier. None on Linux."""
     p = select_persona(seed)
     return p["gpu_class"] if p else None
 
@@ -152,7 +178,14 @@ def forced_gpu_class(seed: int) -> Optional[str]:
 # the Intel-Arc host. On other GPUs the clean set may differ (host-independence open,
 # same as the personas) — Option B (substitution = GPU-independent render hash) would
 # remove that dependency. Validate per-host or move to B before trusting fleet-wide.
-CLEAN_RENDER_SEEDS = [19, 10, 28, 24, 23, 16, 11, 30, 17, 22, 3, 9, 12, 26]
+# RECALIBRATED 2026-06-18 for the real-Firefox GPU mix (incl NVIDIA, which is more
+# consistency-sensitive than the old amd/arc personas). Swept hw_seed 0..30 on the hottest
+# persona (NVIDIA GTX 980) through a residential exit: these 9 stayed well within the clean
+# band with a wide margin to the rest. The old pool's picks scored dirty on NVIDIA (clean
+# only on the retired amd/arc mix) → dropped. NVIDIA is the worst case, so these are clean on
+# amd/intel too. hw_seed = the canvas/WebGL gamma render hash (the dominant consistency-score
+# driver); host-calibrated.
+CLEAN_RENDER_SEEDS = [0, 5, 6, 9, 11, 16, 19, 20, 28]
 
 
 def render_noise_seed(seed: int) -> int:

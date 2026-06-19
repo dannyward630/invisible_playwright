@@ -180,16 +180,27 @@ _WIN_VOICES = ",".join([
 # ──────────────────────────────────────────────────────────────────────
 
 _LINUX_GENERIC_FONT_FACTORS = (
-    # Calibrated to bring DejaVu/Liberation widths in line with what Windows
-    # FP Pro probes report for native Segoe/Times. Linux base measurements
-    # (font_preferences) and Windows targets:
-    #   serif:    162 → 149  factor 0.920
-    #   sans:     162 → 144  factor 0.889
-    #   monospace:121 → 121  factor 1.000
-    #   system:   162 → 147  factor 0.910
+    # GENERIC factors are calibrated to FP Pro's font_preferences probe (NOT the 72px named-probe
+    # scale — verified 2026-06-18: recalibrating to the named-probe scale broke them, mono 121.55
+    # -> 112.4; the original values are correct for font_preferences). DejaVu/Liberation generics
+    # vs Windows targets: serif 0.920, sans 0.889, monospace 1.000, system-ui 0.910.
     "serif|0.920,sans-serif|0.889,monospace|1.000,"
     "system-ui|0.910,cursive|0.932,fantasy|0.812,"
 )
+
+# Calibration reference string for the C++ self-calibrating absolute-width path.
+# MUST be byte-identical to the probe the font_pool widths were measured with
+# (72px canvas measureText) and to the binary's zoom.stealth.font.calib_ref
+# default. Set explicitly so correctness never depends on the binary default.
+_FONT_CALIB_REF = "mmmmwwwwiiiillloooMMMMWWWW0123456789 The quick brown fox"
+# NOTE: there is intentionally NO per-OS collapse-base table here anymore.
+# The C++ font hook self-calibrates: `font_pool` stores the UNIVERSAL real
+# Windows measureText width per font and the binary divides it by the host's
+# own collapse base (gfxTextRun::StealthCollapseBase, summed from the list-head
+# font's per-glyph advances over zoom.stealth.font.calib_ref). So the SAME
+# stored value yields the exact Windows width on Windows, Linux AND macOS with
+# nothing to measure per platform. (Was: _COLLAPSE_BASE = {win32:1530, linux:2400}
+# + a darwin TODO — removed 2026-06-18 when the self-calibrating C++ landed.)
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -478,12 +489,20 @@ def _font_metrics_for_platform(profile_metrics: str) -> str:
     """
     if not profile_metrics:
         return ""
+    # profile_metrics arrives as "name|<universal_real_width>,..." (host-independent
+    # absolute widths, e.g. "arial|2256.7"). We pass them through UNCHANGED: the C++
+    # hook treats a value >= 10 as an ABSOLUTE target measureText width and divides it
+    # by the host's own collapse base (self-calibrating), so the SAME value yields the
+    # exact Windows width on Windows, Linux AND macOS. No per-OS division here.
+    metrics = profile_metrics
+    # Linux ADDITIONALLY needs CSS-generic compensation (DejaVu/Liberation generics
+    # render wider/narrower than Windows). These are multiplicative FACTORS (< 10),
+    # calibrated to FP Pro's font_preferences probe; the C++ hook treats values < 10 as
+    # factors. Generics bypass the whitelist/collapse so they are NOT self-calibrated.
+    # Windows/mac generics render native -> no compensation.
     if sys.platform.startswith("linux"):
-        return _LINUX_GENERIC_FONT_FACTORS + profile_metrics
-    # Windows / macOS: named-font factors only (the generics render native and
-    # bypass the whitelist, so no generic compensation — but the named families
-    # MUST be factored or they all collapse to the list-head width).
-    return profile_metrics
+        return _LINUX_GENERIC_FONT_FACTORS + metrics
+    return metrics
 
 
 def translate_profile_to_prefs(
@@ -519,23 +538,30 @@ def translate_profile_to_prefs(
     # GPU that passes FP Pro host-independently (the host's real GPU never leaks). If no
     # validated persona exists for the sampled gpu_class yet, fall back to the host-real
     # renderer (empty → native ANGLE; SanitizeRenderer at ClientWebGLContext.cpp:2592).
-    _persona = None
-    if sys.platform.startswith("linux"):
-        prefs["zoom.stealth.webgl.renderer"] = profile.gpu.renderer
-        prefs["zoom.stealth.webgl.vendor"]   = profile.gpu.vendor
-        _renderer_lo = (profile.gpu.renderer or "").lower()
+    # Apply the camoufox-derived real-Firefox GPU persona on EVERY host (Win/Linux/Mac).
+    # We must ALWAYS look Windows (rule), and the WebGL override is platform-independent:
+    # SanitizeRenderer (ClientWebGLContext.cpp) is pure string regex, and the param/extension
+    # overrides are pref-driven, so the C++ presents the SAME Windows ANGLE GPU regardless of
+    # the host's real GL backend (it never consults it when the pref is set). This is why a
+    # Windows GPU shows correctly even on a Linux/Mesa host (no more "Generic Renderer").
+    _persona = select_persona(profile.seed)
+    if _persona:
+        # Apply the FULL coherent WebGL override (renderer + vendor + webgl1/webgl2 extensions
+        # + ~100 getParameter values + shader-precision formats). Setting ALL of them — not just
+        # the renderer string — keeps renderer<->params coherent (FP Pro cross-checks them); a
+        # string-only spoof over the host's real params is the old ~0.85 mismatch.
+        for _k, _v in _persona["prefs"].items():
+            if _k == "zoom.stealth.webgl2.enabled":
+                prefs["webgl.enable-webgl2"] = bool(_v)
+            else:
+                prefs[_k] = _v
     else:
-        _persona = select_persona(profile.seed)
-        if _persona:
-            prefs["zoom.stealth.webgl.renderer"] = _persona["renderer"]
-            prefs["zoom.stealth.webgl.vendor"]   = _persona["vendor"]
-        else:
-            prefs["zoom.stealth.webgl.renderer"] = ""
-            prefs["zoom.stealth.webgl.vendor"]   = ""
-        # Canvas-noise mask is calibrated to the REAL host GPU's rendering variance — the canvas is
-        # drawn by real hardware, NOT the persona's claimed GPU, so it must NOT follow the persona
-        # (a non-Intel persona on an Intel host would over-noise). Deployment host is Intel.
-        _renderer_lo = "intel"
+        prefs["zoom.stealth.webgl.renderer"] = ""
+        prefs["zoom.stealth.webgl.vendor"]   = ""
+    # Canvas-noise mask is calibrated to the REAL host GPU's rendering variance — the canvas is
+    # drawn by real hardware, NOT the persona's claimed GPU, so it must NOT follow the persona
+    # (a non-Intel persona on an Intel host would over-noise). Dev/deployment host is Intel.
+    _renderer_lo = "intel"
 
     # MSAA: on Windows, pin to 4 (Firefox default for ANGLE) so gl.SAMPLES is
     # constant across all sessions. Different MSAA values cause different CN-set
@@ -585,6 +611,10 @@ def translate_profile_to_prefs(
     prefs["zoom.stealth.font.metrics"]   = _font_metrics_for_platform(
         profile._raw.get("font_metrics", "") or ""
     )
+    # Reference string the binary sums the collapsed font's advances over to
+    # self-calibrate the per-host collapse base (turns the absolute widths in
+    # `metrics` into the right factor on any OS). See _font_metrics_for_platform.
+    prefs["zoom.stealth.font.calib_ref"] = _FONT_CALIB_REF
 
     # UI / dark mode + Windows colors palette (only when light theme).
     prefs["ui.systemUsesDarkTheme"] = int(profile.dark_theme)
@@ -625,21 +655,14 @@ def translate_profile_to_prefs(
     prefs["zoom.stealth.webrtc.host_ip"] = _lan_ip
 
     # Windows/mac extension list:
-    #  - persona active → FORCE the validated extension list. A non-Intel host's native
-    #    extensions would mismatch the persona's renderer (renderer says AMD/Intel-Arc but
-    #    extensions are the host's), so the persona must carry its own list to stay
-    #    host-independent.
+    #  - persona active → the coherent webgl1/webgl2 extension lists (in the GPU's real
+    #    native order) were ALREADY applied above from the GPU pool's `prefs`, alongside the
+    #    matching renderer + params + shader-precisions. Nothing to do here.
     #  - no persona → clear so the host-real renderer reports its native extension set
     #    (matches real vanilla captures for that host's GPU).
-    if not sys.platform.startswith("linux"):
-        if _persona:
-            # The persona carries its OWN extension lists in EXACT NATIVE ORDER — a
-            # reordered/foreign list is flagged by FP Pro (verified 2026-06-13).
-            prefs["zoom.stealth.webgl.extensions"]  = _persona["ext1"]
-            prefs["zoom.stealth.webgl2.extensions"] = _persona["ext2"]
-        else:
-            prefs["zoom.stealth.webgl.extensions"]  = ""
-            prefs["zoom.stealth.webgl2.extensions"] = ""
+    if not sys.platform.startswith("linux") and not _persona:
+        prefs["zoom.stealth.webgl.extensions"]  = ""
+        prefs["zoom.stealth.webgl2.extensions"] = ""
 
     # Linux Xvfb workarounds (no-op on Windows).
     if sys.platform.startswith("linux"):

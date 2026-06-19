@@ -306,9 +306,9 @@ def test_windows_virtual_display_with_socks_proxy(monkeypatch):
 @pytest.mark.integration
 def test_linux_xvfb_workarounds_with_socks_proxy(monkeypatch):
     """IT11 — Linux + SOCKS5 proxy: Xvfb workarounds applied, GPU renderer
-    spoofed from profile, SOCKS keys written. virtual_display is a Windows-
-    only concept so we omit it here; passing ``virtual_display=True`` on
-    Linux must NOT set ``security.sandbox.gpu.level`` (covered by VD3)."""
+    spoofed from the validated WebGL persona, SOCKS keys written. virtual_display
+    is a Windows-only concept so we omit it here; passing ``virtual_display=True``
+    on Linux must NOT set ``security.sandbox.gpu.level`` (covered by VD3)."""
     monkeypatch.setattr(sys, "platform", "linux")
     profile = generate_profile(seed=42)
     prefs = translate_profile_to_prefs(profile, virtual_display=True)
@@ -323,9 +323,15 @@ def test_linux_xvfb_workarounds_with_socks_proxy(monkeypatch):
     assert prefs["webgl.force-enabled"] is True
     # Windows-only sandbox key absent on Linux even with virtual_display=True.
     assert "security.sandbox.gpu.level" not in prefs
-    # GPU renderer is spoofed from the profile (not cleared like on Windows).
-    assert prefs["zoom.stealth.webgl.renderer"] == profile.gpu.renderer
+    # GPU renderer is spoofed from the validated WebGL persona (a coherent Windows
+    # ANGLE GPU whose renderer + params cross-check), applied on every host — NOT the
+    # raw profile.gpu.renderer, which has no coherent param set and is never exposed.
+    from invisible_playwright._webgl_personas import select_persona
+    _persona = select_persona(profile.seed)
+    assert _persona, "expected a validated persona for this seed"
+    assert prefs["zoom.stealth.webgl.renderer"] == _persona["prefs"]["zoom.stealth.webgl.renderer"]
     assert prefs["zoom.stealth.webgl.renderer"]  # non-empty
+    assert "ANGLE" in prefs["zoom.stealth.webgl.renderer"]  # Windows ANGLE form
     # SOCKS branch wrote its keys without clobbering the Linux prefs above.
     assert prefs["network.proxy.type"] == 1
     assert prefs["network.proxy.socks"] == "127.0.0.1"

@@ -2,669 +2,722 @@
   "core": [
     {
       "name": "arial",
-      "factor": 0.978
+      "width": 2256.7
     },
     {
       "name": "arial black",
-      "factor": 1.168
+      "width": 2256.7
     },
     {
       "name": "arial narrow",
-      "factor": 0.854
+      "width": 2216.7
     },
     {
       "name": "bahnschrift",
-      "factor": 0.951
+      "width": 2231.9
     },
     {
       "name": "bahnschrift condensed",
-      "factor": 1.179
+      "width": 2216.7
     },
     {
       "name": "bahnschrift light",
-      "factor": 0.908
+      "width": 2216.7
     },
     {
       "name": "bahnschrift light condensed",
-      "factor": 1.053
+      "width": 2216.7
     },
     {
       "name": "bahnschrift light semicondensed",
-      "factor": 1.063
+      "width": 2216.7
     },
     {
       "name": "bahnschrift semibold",
-      "factor": 0.926
+      "width": 2216.7
     },
     {
       "name": "bahnschrift semibold condensed",
-      "factor": 1.131
+      "width": 2216.7
     },
     {
       "name": "bahnschrift semibold semicondensed",
-      "factor": 1.043
+      "width": 2216.7
     },
     {
       "name": "bahnschrift semicondensed",
-      "factor": 1.098
+      "width": 2216.7
     },
     {
       "name": "bahnschrift semilight",
-      "factor": 0.873
+      "width": 2216.7
     },
     {
       "name": "bahnschrift semilight condensed",
-      "factor": 0.905
+      "width": 2216.7
     },
     {
       "name": "bahnschrift semilight semicondensed",
-      "factor": 1.135
+      "width": 2216.7
+    },
+    {
+      "name": "calibri",
+      "width": 2139.5
     },
     {
       "name": "calibri light",
-      "factor": 0.901
+      "width": 2139.5
     },
     {
       "name": "cambria",
-      "factor": 1.063
+      "width": 2258.2
     },
     {
       "name": "cambria math",
-      "factor": 1.041
+      "width": 2258.2
     },
     {
       "name": "candara",
-      "factor": 0.927
+      "width": 2187.8
     },
     {
       "name": "candara light",
-      "factor": 0.892
+      "width": 2187.8
     },
     {
       "name": "cascadia code",
-      "factor": 1.139
+      "width": 2362.3
     },
     {
       "name": "cascadia mono",
-      "factor": 0.95
+      "width": 2362.3
     },
     {
       "name": "comic sans ms",
-      "factor": 1.087
+      "width": 2361.9
     },
     {
       "name": "consolas",
-      "factor": 1.158
+      "width": 2216.7
     },
     {
       "name": "constantia",
-      "factor": 1.052
+      "width": 2283.2
     },
     {
       "name": "corbel",
-      "factor": 0.895
+      "width": 2129.9
     },
     {
       "name": "corbel light",
-      "factor": 0.876
+      "width": 2129.9
     },
     {
       "name": "courier new",
-      "factor": 1.187
+      "width": 2419.2
     },
     {
       "name": "ebrima",
-      "factor": 0.962
+      "width": 2285.2
+    },
+    {
+      "name": "franklin gothic",
+      "width": 2225.4
     },
     {
       "name": "franklin gothic medium",
-      "factor": 1.031
+      "width": 2225.4
     },
     {
       "name": "gabriola",
-      "factor": 1.077
+      "width": 1598.5
+    },
+    {
+      "name": "gadugi",
+      "width": 2285.2
     },
     {
       "name": "georgia",
-      "factor": 1.094
+      "width": 2338.7
     },
     {
       "name": "hololens mdl2 assets",
-      "factor": 1.145
+      "width": 2216.7
     },
     {
       "name": "impact",
-      "factor": 0.862
+      "width": 2060.8
     },
     {
       "name": "ink free",
-      "factor": 1.048
+      "width": 2122.5
+    },
+    {
+      "name": "javanese text",
+      "width": 2311.9
     },
     {
       "name": "leelawadee ui semilight",
-      "factor": 1.061
+      "width": 2283.4
     },
     {
       "name": "lucida console",
-      "factor": 1.131
+      "width": 2429.5
     },
     {
       "name": "lucida sans unicode",
-      "factor": 1.014
+      "width": 2464.3
     },
     {
       "name": "malgun gothic",
-      "factor": 1.128
+      "width": 2351.1
     },
     {
       "name": "malgun gothic semilight",
-      "factor": 1.051
+      "width": 2351.1
     },
     {
       "name": "marlett",
-      "factor": 0.855
+      "width": 3740.2
     },
     {
       "name": "microsoft himalaya",
-      "factor": 1.022
+      "width": 1468.4
     },
     {
       "name": "microsoft jhenghei",
-      "factor": 1.061
+      "width": 2440.4
     },
     {
       "name": "microsoft jhenghei light",
-      "factor": 0.94
+      "width": 2440.4
     },
     {
       "name": "microsoft jhenghei ui",
-      "factor": 1.136
+      "width": 2440.4
     },
     {
       "name": "microsoft jhenghei ui light",
-      "factor": 0.826
+      "width": 2440.4
     },
     {
       "name": "microsoft new tai lue",
-      "factor": 0.953
+      "width": 2285.2
     },
     {
       "name": "microsoft phagspa",
-      "factor": 0.988
+      "width": 2285.2
     },
     {
       "name": "microsoft sans serif",
-      "factor": 0.941
+      "width": 2256.6
     },
     {
       "name": "microsoft tai le",
-      "factor": 0.957
+      "width": 2285.2
     },
     {
       "name": "microsoft yahei",
-      "factor": 1.076
+      "width": 2487.6
     },
     {
       "name": "microsoft yahei light",
-      "factor": 1.043
+      "width": 2487.6
     },
     {
       "name": "microsoft yahei ui",
-      "factor": 1.076
+      "width": 2487.6
     },
     {
       "name": "microsoft yahei ui light",
-      "factor": 1.094
+      "width": 2487.6
     },
     {
       "name": "microsoft yi baiti",
-      "factor": 1.008
+      "width": 1830.7
     },
     {
       "name": "mingliu-extb",
-      "factor": 1.173
+      "width": 2016
     },
     {
       "name": "mingliu_hkscs-extb",
-      "factor": 1.101
+      "width": 2016
     },
     {
       "name": "mongolian baiti",
-      "factor": 1.056
+      "width": 2191.7
     },
     {
       "name": "ms gothic",
-      "factor": 1.119
+      "width": 2016
     },
     {
       "name": "ms pgothic",
-      "factor": 1.074
+      "width": 2031.7
     },
     {
       "name": "mv boli",
-      "factor": 0.932
+      "width": 2417.4
+    },
+    {
+      "name": "myanmar text",
+      "width": 2285.2
     },
     {
       "name": "nirmala ui",
-      "factor": 0.916
+      "width": 2283.4
     },
     {
       "name": "nirmala ui semilight",
-      "factor": 1.15
+      "width": 2283.4
     },
     {
       "name": "nsimsun",
-      "factor": 1.119
+      "width": 2016
     },
     {
       "name": "palatino linotype",
-      "factor": 1.067
+      "width": 2358.6
     },
     {
       "name": "pmingliu-extb",
-      "factor": 1.16
+      "width": 2065.9
     },
     {
       "name": "sans serif collection",
-      "factor": 0.854
+      "width": 2361.6
     },
     {
       "name": "segoe mdl2 assets",
-      "factor": 0.858
+      "width": 2137.2
     },
     {
       "name": "segoe print",
-      "factor": 1.033
+      "width": 2675.2
     },
     {
       "name": "segoe script",
-      "factor": 1.058
+      "width": 2830.3
     },
     {
       "name": "segoe ui",
-      "factor": 0.948
+      "width": 2285.2
     },
     {
       "name": "segoe ui black",
-      "factor": 1.148
+      "width": 2285.2
     },
     {
       "name": "segoe ui emoji",
-      "factor": 0.924
+      "width": 2283.4
     },
     {
       "name": "segoe ui historic",
-      "factor": 0.969
+      "width": 2283.4
     },
     {
       "name": "segoe ui semibold",
-      "factor": 0.965
+      "width": 2216.7
     },
     {
       "name": "segoe ui semilight",
-      "factor": 1.055
+      "width": 2216.7
     },
     {
       "name": "segoe ui symbol",
-      "factor": 0.972
+      "width": 2283.4
     },
     {
       "name": "segoe ui variable",
-      "factor": 0.907
+      "width": 2216.7
     },
     {
       "name": "simsun",
-      "factor": 1.113
+      "width": 2016
     },
     {
       "name": "simsun-extb",
-      "factor": 1.095
+      "width": 2016
     },
     {
       "name": "sitka banner",
-      "factor": 1.078
+      "width": 2007.8
     },
     {
       "name": "sitka display",
-      "factor": 0.838
+      "width": 2007.8
     },
     {
       "name": "sitka heading",
-      "factor": 0.843
+      "width": 2007.8
     },
     {
       "name": "sitka small",
-      "factor": 1.131
+      "width": 2007.8
     },
     {
       "name": "sitka subheading",
-      "factor": 0.942
+      "width": 2007.8
     },
     {
       "name": "sitka text",
-      "factor": 1.044
+      "width": 2007.8
     },
     {
       "name": "sylfaen",
-      "factor": 0.971
+      "width": 2279.6
     },
     {
       "name": "symbol",
-      "factor": 0.866
+      "width": 2223.4
     },
     {
       "name": "tahoma",
-      "factor": 0.962
+      "width": 2233.1
     },
     {
       "name": "times new roman",
-      "factor": 0.926
+      "width": 2191.7
     },
     {
       "name": "trebuchet ms",
-      "factor": 0.912
+      "width": 2222.4
     },
     {
       "name": "verdana",
-      "factor": 1.128
+      "width": 2529.1
     },
     {
       "name": "webdings",
-      "factor": 0.849
+      "width": 3627.5
     },
     {
       "name": "wingdings",
-      "factor": 0.864
+      "width": 3539.7
     },
     {
       "name": "wingdings 2",
-      "factor": 1.093
+      "width": 3582.1
     },
     {
       "name": "wingdings 3",
-      "factor": 0.861
+      "width": 2963.4
     },
     {
       "name": "yu gothic",
-      "factor": 1.069
+      "width": 2351.3
     },
     {
       "name": "yu gothic light",
-      "factor": 1.038
+      "width": 2351.3
     },
     {
       "name": "yu gothic medium",
-      "factor": 1.161
+      "width": 2216.7
     },
     {
       "name": "yu gothic ui",
-      "factor": 0.886
+      "width": 2285.2
     },
     {
       "name": "yu gothic ui light",
-      "factor": 1.093
+      "width": 2285.2
     },
     {
       "name": "yu gothic ui semibold",
-      "factor": 0.942
+      "width": 2216.7
     },
     {
       "name": "yu gothic ui semilight",
-      "factor": 0.923
+      "width": 2216.7
     }
   ],
   "optional": [
     {
       "name": "aparajita",
-      "factor": 0.94
+      "width": 2216.7
     },
     {
       "name": "arabic typesetting",
-      "factor": 1.093
+      "width": 2216.7
     },
     {
       "name": "arial unicode ms",
-      "factor": 1.047
+      "width": 2216.7
     },
     {
       "name": "batang",
-      "factor": 0.911
-    },
-    {
-      "name": "calibri",
-      "factor": 0.934
+      "width": 2216.7
     },
     {
       "name": "century",
-      "factor": 1.078
+      "width": 2397.7
     },
     {
       "name": "century gothic",
-      "factor": 0.886
+      "width": 2409.1
     },
     {
       "name": "dengxian",
-      "factor": 0.846
+      "width": 2216.7
     },
     {
       "name": "dfkai-sb",
-      "factor": 0.946
+      "width": 2216.7
     },
     {
       "name": "dokchampa",
-      "factor": 1.162
+      "width": 2216.7
     },
     {
       "name": "estrangelo edessa",
-      "factor": 1.095
+      "width": 2216.7
     },
     {
       "name": "euphemia",
-      "factor": 1.117
+      "width": 2216.7
     },
     {
       "name": "fangsong",
-      "factor": 0.942
-    },
-    {
-      "name": "franklin gothic",
-      "factor": 0.942
-    },
-    {
-      "name": "gadugi",
-      "factor": 0.945
+      "width": 2216.7
     },
     {
       "name": "gautami",
-      "factor": 1.134
+      "width": 2216.7
     },
     {
       "name": "haettenschweiler",
-      "factor": 0.874
+      "width": 1567.6
     },
     {
       "name": "helv",
-      "factor": 0.923
+      "width": 2256.6
     },
     {
       "name": "iskoola pota",
-      "factor": 0.857
-    },
-    {
-      "name": "javanese text",
-      "factor": 1.083
+      "width": 2216.7
     },
     {
       "name": "kaiti",
-      "factor": 1.145
+      "width": 2216.7
     },
     {
       "name": "kalinga",
-      "factor": 0.953
+      "width": 2216.7
     },
     {
       "name": "kartika",
-      "factor": 0.882
+      "width": 2216.7
     },
     {
       "name": "khmer ui",
-      "factor": 1.137
+      "width": 2216.7
     },
     {
       "name": "kokila",
-      "factor": 0.919
+      "width": 2216.7
     },
     {
       "name": "lao ui",
-      "factor": 0.904
+      "width": 2216.7
     },
     {
       "name": "latha",
-      "factor": 0.839
+      "width": 2216.7
     },
     {
       "name": "leelawadee",
-      "factor": 0.982
+      "width": 2267.4
     },
     {
       "name": "leelawadee ui",
-      "factor": 0.992
+      "width": 2283.4
     },
     {
       "name": "levenim mt",
-      "factor": 1.054
+      "width": 2216.7
     },
     {
       "name": "mangal",
-      "factor": 1.154
+      "width": 2216.7
     },
     {
       "name": "meiryo",
-      "factor": 1.165
+      "width": 2216.7
     },
     {
       "name": "meiryo ui",
-      "factor": 1.081
+      "width": 2216.7
     },
     {
       "name": "microsoft uighur",
-      "factor": 0.969
+      "width": 1498.1
     },
     {
       "name": "monotype corsiva",
-      "factor": 0.939
+      "width": 1929.3
     },
     {
       "name": "ms mincho",
-      "factor": 1.112
+      "width": 2216.7
     },
     {
       "name": "ms outlook",
-      "factor": 0.921
+      "width": 2361.9
     },
     {
       "name": "ms pmincho",
-      "factor": 0.925
+      "width": 2216.7
     },
     {
       "name": "ms reference sans serif",
-      "factor": 0.858
+      "width": 2529.0
     },
     {
       "name": "ms reference specialty",
-      "factor": 0.958
+      "width": 2976.2
     },
     {
       "name": "ms ui gothic",
-      "factor": 1.097
+      "width": 2031.7
     },
     {
       "name": "mt extra",
-      "factor": 0.905
-    },
-    {
-      "name": "myanmar text",
-      "factor": 0.961
+      "width": 2183.8
     },
     {
       "name": "nyala",
-      "factor": 1.108
+      "width": 2216.7
     },
     {
       "name": "plantagenet cherokee",
-      "factor": 1.115
+      "width": 2216.7
     },
     {
       "name": "pmingliu",
-      "factor": 1.125
+      "width": 2216.7
     },
     {
       "name": "pristina",
-      "factor": 1.023
+      "width": 1829.1
     },
     {
       "name": "raavi",
-      "factor": 0.826
+      "width": 2216.7
     },
     {
       "name": "segoe fluent icons",
-      "factor": 1.049
+      "width": 2142.7
     },
     {
       "name": "segoe ui light",
-      "factor": 0.918
+      "width": 2216.7
     },
     {
       "name": "shonar bangla",
-      "factor": 1.141
+      "width": 2216.7
     },
     {
       "name": "shruti",
-      "factor": 1.172
+      "width": 2216.7
     },
     {
       "name": "simhei",
-      "factor": 1.141
+      "width": 2216.7
     },
     {
       "name": "simkai",
-      "factor": 1.1
+      "width": 2216.7
     },
     {
       "name": "small fonts",
-      "factor": 0.849
+      "width": 2256.7
     },
     {
       "name": "traditional arabic",
-      "factor": 0.893
+      "width": 2216.7
     },
     {
       "name": "tunga",
-      "factor": 0.825
+      "width": 2216.7
     },
     {
       "name": "urdu typesetting",
-      "factor": 0.869
+      "width": 2216.7
     },
     {
       "name": "utsaah",
-      "factor": 1.144
+      "width": 2216.7
     },
     {
       "name": "vani",
-      "factor": 1.078
+      "width": 2216.7
     },
     {
       "name": "vijaya",
-      "factor": 0.917
+      "width": 2216.7
     },
     {
       "name": "vrinda",
-      "factor": 0.985
+      "width": 2216.7
     },
     {
       "name": "yu mincho",
-      "factor": 0.867
+      "width": 2216.7
+    }
+  ],
+  "profiles": [
+    {
+      "name": "win_office",
+      "weight": 40,
+      "optional": [
+        "century",
+        "century gothic",
+        "helv",
+        "haettenschweiler",
+        "leelawadee",
+        "ms outlook",
+        "ms reference specialty",
+        "ms ui gothic",
+        "mt extra",
+        "microsoft uighur",
+        "monotype corsiva",
+        "pristina",
+        "segoe ui light",
+        "small fonts"
+      ]
+    },
+    {
+      "name": "win_base",
+      "weight": 35,
+      "optional": [
+        "century",
+        "century gothic",
+        "helv",
+        "haettenschweiler",
+        "leelawadee",
+        "ms ui gothic",
+        "microsoft uighur",
+        "monotype corsiva",
+        "pristina",
+        "segoe ui light",
+        "small fonts"
+      ]
+    },
+    {
+      "name": "win_lean",
+      "weight": 25,
+      "optional": [
+        "century",
+        "century gothic",
+        "helv",
+        "haettenschweiler",
+        "leelawadee",
+        "ms ui gothic",
+        "segoe ui light",
+        "small fonts"
+      ]
     }
   ]
 }

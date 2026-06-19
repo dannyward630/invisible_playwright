@@ -24,7 +24,7 @@ from .constants import (
     BROKEN_VERSIONS,
     GEOIP_ASSET,
     GEOIP_MMDB_NAME,
-    GEOIP_MMDB_VERSION,
+    GEOIP_REPO,
     GEOIP_RELEASE_URL_TEMPLATE,
     RELEASE_URL_TEMPLATE,
 )
@@ -198,26 +198,23 @@ def ensure_binary(version: str = BINARY_VERSION) -> Path:
 # ─────────────────────────────────────────────────────────────────────────
 #  GeoIP mmdb (timezone="auto" → map egress IP → IANA zone)
 #
-#  daijro/geoip-all-in-one is rebuilt WEEKLY, so we don't pin a tag. We cache
-#  the latest mmdb and, once it's older than GEOIP_REFRESH_DAYS, re-check the
-#  latest release and pull a newer build if one exists. Net effect: no download
-#  (not even an API call) on a launch within the window; auto-refresh after it;
-#  a stale cache is reused when offline rather than breaking the launch.
+#  daijro/geoip-all-in-one is rebuilt weekly and KEEPS ONLY the latest ~2
+#  releases — older tags are pruned and 404. So we NEVER pin a tag: on every
+#  launch we resolve the CURRENT latest tag from the `releases/latest/download`
+#  permalink (its 302 Location carries the tag — a plain CDN request, NOT the
+#  rate-limited GitHub API) and download it if it differs from the cached one.
+#  Offline → reuse the cached mmdb; cold cache + offline → raise (the caller can
+#  then fall back off timezone="auto"). No stale pinned tag to rot.
 # ─────────────────────────────────────────────────────────────────────────
-GEOIP_REFRESH_DAYS = 7  # matches daijro's weekly rebuild cadence
 
 
 def _geoip_root() -> Path:
     return cache_root() / "geoip"
 
 
-def _geoip_check_marker() -> Path:
-    return _geoip_root() / ".last_check"
-
-
 def _cached_geoip_mmdb() -> Path | None:
     """Newest cached mmdb across tag dirs, or None. Tag dirs are date strings
-    (e.g. ``2026.06.03``) so a lexical sort is chronological."""
+    (e.g. ``2026.06.17``) so a lexical sort is chronological."""
     root = _geoip_root()
     if not root.exists():
         return None
@@ -225,21 +222,14 @@ def _cached_geoip_mmdb() -> Path | None:
     return cands[-1] if cands else None
 
 
-def _geoip_cache_fresh(max_age_days: int) -> bool:
-    marker = _geoip_check_marker()
-    if not marker.exists():
-        return False
-    return (time.time() - marker.stat().st_mtime) < max_age_days * 86400
+def _geoip_latest_url() -> str:
+    return f"https://github.com/{GEOIP_REPO}/releases/latest/download/{GEOIP_ASSET}"
 
 
-def _touch_geoip_marker() -> None:
-    m = _geoip_check_marker()
-    m.parent.mkdir(parents=True, exist_ok=True)
-    m.touch()
-
-
-def _latest_geoip_tag() -> str:
-    """Latest ``daijro/geoip-all-in-one`` release tag via the GitHub API."""
+def _latest_geoip_tag_api() -> str:
+    """Latest ``daijro/geoip-all-in-one`` release tag via the GitHub API
+    (fallback for :func:`_resolve_latest_geoip_tag` when the permalink HEAD
+    can't be parsed)."""
     headers = {"Accept": "application/vnd.github+json"}
     token = _github_token()
     if token:
@@ -253,6 +243,25 @@ def _latest_geoip_tag() -> str:
     if not tag:
         raise RuntimeError("no tag_name in geoip-all-in-one latest release")
     return tag
+
+
+def _resolve_latest_geoip_tag() -> str | None:
+    """Current latest release tag WITHOUT the rate-limited API: HEAD the
+    ``releases/latest/download`` permalink — GitHub answers 302 with
+    ``Location: …/releases/download/<tag>/<asset>``. Falls back to the API,
+    then to ``None`` (offline / unparseable)."""
+    try:
+        r = requests.head(_geoip_latest_url(), allow_redirects=False, timeout=10)
+        loc = r.headers.get("Location") or r.headers.get("location") or ""
+        m = re.search(r"/releases/download/([^/]+)/", loc)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    try:
+        return _latest_geoip_tag_api()
+    except Exception:
+        return None
 
 
 def _download_geoip_tag(tag: str) -> Path:
@@ -290,18 +299,17 @@ def geoip_mmdb_path() -> Path | None:
     return _cached_geoip_mmdb()
 
 
-def ensure_geoip_mmdb(max_age_days: int = GEOIP_REFRESH_DAYS) -> Path:
-    """Return a geoip mmdb, kept fresh against daijro's weekly rebuild.
+def ensure_geoip_mmdb() -> Path:
+    """Return the geoip mmdb, always the latest daijro build. Checked on EVERY
+    call — a single cheap permalink HEAD (no GitHub API, so no rate limit).
 
     Resolution order:
       1. ``STEALTHFOX_GEOIP_MMDB`` env → use that file (user-supplied / test).
-      2. A cached mmdb younger than ``max_age_days`` → use it (no network).
-      3. Else ask GitHub for the latest tag, download it if not already cached,
-         prune older tags, and reset the freshness timer.
-      4. If the API/download is unreachable but a cached mmdb exists → use it
-         (and reset the timer so we don't hammer the API while offline).
-      5. Cold cache + no network → fall back to the pinned ``GEOIP_MMDB_VERSION``;
-         if that download also fails, raise.
+      2. Resolve the CURRENT latest tag. If it differs from the newest cached
+         tag (or nothing is cached) → download it, prune older tags, return it.
+      3. Latest tag == newest cached tag → use the cache (no download).
+      4. Couldn't resolve the tag (offline / unparseable): cached mmdb → use it;
+         cold cache → raise (caller can then drop timezone="auto").
     """
     override = os.environ.get("STEALTHFOX_GEOIP_MMDB")
     if override:
@@ -311,18 +319,25 @@ def ensure_geoip_mmdb(max_age_days: int = GEOIP_REFRESH_DAYS) -> Path:
         return p
 
     cached = _cached_geoip_mmdb()
-    if cached and _geoip_cache_fresh(max_age_days):
-        return cached
+    cached_tag = cached.parent.name if cached else None
 
-    try:
-        tag = _latest_geoip_tag()
-    except Exception:
-        if cached:
-            _touch_geoip_marker()  # recheck after the window; don't hammer
-            return cached
-        tag = GEOIP_MMDB_VERSION   # cold cache + API down → pinned fallback
+    latest = _resolve_latest_geoip_tag()
+    if latest and latest != cached_tag:
+        # newer build available (or nothing cached) → fetch it
+        try:
+            mmdb = _download_geoip_tag(latest)
+            _prune_old_geoip_tags(mmdb.parent.name)
+            return mmdb
+        except Exception:
+            if cached:
+                return cached  # transient download failure → keep using the cache
+            raise
 
-    mmdb = _download_geoip_tag(tag)
-    _prune_old_geoip_tags(mmdb.parent.name)
-    _touch_geoip_marker()
-    return mmdb
+    if cached:
+        return cached  # cache is already the latest, or we're offline
+
+    raise RuntimeError(
+        "geoip mmdb unavailable: no cached copy and GitHub is unreachable. "
+        "Connect once to download it, or set STEALTHFOX_GEOIP_MMDB to a local "
+        "geoip-aio-all.mmdb file."
+    )
