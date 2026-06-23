@@ -1,11 +1,11 @@
 # invisible_playwright
 
-[![tests](https://github.com/feder-cr/invisible_playwright/actions/workflows/tests.yml/badge.svg)](https://github.com/feder-cr/invisible_playwright/actions/workflows/tests.yml)
+[![tests](https://github.com/dannyward630/invisible_playwright/actions/workflows/tests.yml/badge.svg)](https://github.com/dannyward630/invisible_playwright/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Firefox 150.0.1](https://img.shields.io/badge/firefox-150.0.1-orange.svg)](https://www.mozilla.org/firefox/)
-[![GitHub release](https://img.shields.io/github/v/release/feder-cr/invisible_playwright.svg)](https://github.com/feder-cr/invisible_playwright/releases)
-[![GitHub stars](https://img.shields.io/github/stars/feder-cr/invisible_playwright.svg?style=social)](https://github.com/feder-cr/invisible_playwright/stargazers)
+[![GitHub release](https://img.shields.io/github/v/release/dannyward630/invisible_playwright.svg)](https://github.com/dannyward630/invisible_playwright/releases)
+[![GitHub stars](https://img.shields.io/github/stars/dannyward630/invisible_playwright.svg?style=social)](https://github.com/dannyward630/invisible_playwright/stargazers)
 [![browser launches](https://img.shields.io/github/downloads/feder-cr/invisible_firefox/usage-counter/total?label=browser%20launches&color=blue)](https://github.com/feder-cr/invisible_firefox/releases/tag/usage-counter)
 
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Federico%20Elia-0A66C2?logo=linkedin&logoColor=white)](https://it.linkedin.com/in/federico-elia-5199951b6)
@@ -54,7 +54,7 @@ Everything is driven by preferences - no hardcoded values in the binary. You cha
 ## Install
 
 ```bash
-pip install git+https://github.com/feder-cr/invisible_playwright.git
+pip install git+https://github.com/dannyward630/invisible_playwright.git
 python -m invisible_playwright fetch      # one-time ~100 MB download, SHA256-verified
 ```
 

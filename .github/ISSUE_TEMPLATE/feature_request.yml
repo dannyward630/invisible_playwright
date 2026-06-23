@@ -9,7 +9,7 @@ body:
         Thanks for the suggestion! Please check that:
         - Your idea is **in scope** for this repo (the Python wrapper, sampler, CLI, packaging).
         - Changes to the patched Firefox C++ source belong at [feder-cr/firefox-stealth](https://github.com/feder-cr/firefox-stealth) instead.
-        - You have searched [existing issues](https://github.com/feder-cr/invisible_playwright/issues?q=is%3Aissue) for similar requests.
+        - You have searched [existing issues](https://github.com/dannyward630/invisible_playwright/issues?q=is%3Aissue) for similar requests.
   - type: textarea
     id: problem
     attributes:

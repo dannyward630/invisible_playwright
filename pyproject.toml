@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "feder-cr", email = "85809106+feder-cr@users.noreply.github.com" }]
+maintainers = [{ name = "Danny Ward", email = "71604164+dannyward630@users.noreply.github.com" }]
 keywords = ["playwright", "firefox", "stealth", "anti-detect", "automation"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -52,8 +53,9 @@ norecursedirs = ["playwright-upstream"]
 invisible-playwright = "invisible_playwright.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/feder-cr/invisible_playwright"
-Issues = "https://github.com/feder-cr/invisible_playwright/issues"
+Homepage = "https://github.com/dannyward630/invisible_playwright"
+Issues = "https://github.com/dannyward630/invisible_playwright/issues"
+Source = "https://github.com/dannyward630/invisible_playwright"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/invisible_playwright"]
