@@ -176,13 +176,14 @@ def test_release_url_template_formats_cleanly():
 
 
 @pytest.mark.unit
-def test_release_url_points_at_owned_repo():
-    """The template MUST point at an owner/repo the maintainer actually
-    controls. A typo here would direct everyone's downloads at a stranger's
-    GitHub account — silent supply-chain risk."""
-    assert "/dannyward630/invisible_playwright/" in RELEASE_URL_TEMPLATE, (
+def test_release_url_points_at_binary_release_host():
+    """The template must point at the repo that actually publishes the
+    multi-platform Firefox archives. Project metadata can point at a fork, but
+    this URL cannot move until that fork mirrors the release assets."""
+    assert "/feder-cr/invisible_playwright/" in RELEASE_URL_TEMPLATE, (
         f"RELEASE_URL_TEMPLATE was changed to point elsewhere: "
-        f"{RELEASE_URL_TEMPLATE!r}. Update this test only if the move is intentional."
+        f"{RELEASE_URL_TEMPLATE!r}. Update this test only after the release "
+        "assets are mirrored there."
     )
 
 

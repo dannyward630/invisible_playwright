@@ -63,7 +63,7 @@ BINARY_ENTRY_REL = {
 
 # GitHub release URL template. The "TODO" owner is resolved at publication time.
 RELEASE_URL_TEMPLATE = (
-    "https://github.com/dannyward630/invisible_playwright/releases/download/{tag}/{asset}"
+    "https://github.com/feder-cr/invisible_playwright/releases/download/{tag}/{asset}"
 )
 
 # ─────────────────────────────────────────────────────────────────────────
