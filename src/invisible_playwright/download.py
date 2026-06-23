@@ -117,7 +117,7 @@ def _extract(archive: Path, dst: Path) -> None:
             zf.extractall(dst)
     elif archive.name.endswith(".tar.gz") or archive.suffix in {".tgz", ".gz"}:
         with tarfile.open(archive, "r:gz") as tf:
-            tf.extractall(dst)
+            tf.extractall(dst, filter="data")
     else:
         raise RuntimeError(f"unknown archive format: {archive}")
 

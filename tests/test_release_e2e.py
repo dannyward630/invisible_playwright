@@ -55,7 +55,7 @@ from pathlib import Path
 import pytest
 
 
-REPO_URL = "https://github.com/feder-cr/invisible_playwright.git"
+REPO_URL = "https://github.com/dannyward630/invisible_playwright.git"
 REV = os.environ.get("INVPW_E2E_REV", "main")
 
 

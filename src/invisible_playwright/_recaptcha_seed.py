@@ -49,7 +49,7 @@ def _hex_rand(rng: random.Random, length: int) -> str:
 
 
 def _yyyymmdd_utc(ts: int) -> str:
-    return datetime.datetime.utcfromtimestamp(ts).strftime("%Y%m%d")
+    return datetime.datetime.fromtimestamp(ts, datetime.UTC).strftime("%Y%m%d")
 
 
 # IANA timezone -> (country_code, lang) for CONSENT cookie coherence.
@@ -167,7 +167,7 @@ def _cf_bm_cookie(rng: random.Random, now: int, domain: str) -> dict:
 
 def _onetrust_cookie(rng: random.Random, now: int, domain: str) -> dict:
     age_d = rng.randint(7, 365)
-    iso = datetime.datetime.utcfromtimestamp(now - age_d * 86400).strftime(
+    iso = datetime.datetime.fromtimestamp(now - age_d * 86400, datetime.UTC).strftime(
         "%Y-%m-%dT%H:%M:%S.000Z"
     )
     return {"name": "OptanonAlertBoxClosed",

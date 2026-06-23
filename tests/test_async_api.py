@@ -81,3 +81,28 @@ def test_async_default_context_kwargs_match_sync():
     a = AsyncIP(seed=42, timezone="America/New_York", locale="de-DE")
     s = SyncIP(seed=42, timezone="America/New_York", locale="de-DE")
     assert a._default_context_kwargs() == s._default_context_kwargs()
+
+
+@pytest.mark.unit
+def test_async_browser_new_page_gets_profile_defaults(monkeypatch):
+    """Async Browser.new_page() must mirror the sync convenience path."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    fake_page = MagicMock(name="page")
+    original_new_page = AsyncMock(name="new_page", return_value=fake_page)
+    fake_browser = MagicMock(name="browser")
+    fake_browser.new_context = AsyncMock(name="new_context")
+    fake_browser.new_page = original_new_page
+
+    obj = AsyncIP(seed=42, locale="de-DE", timezone="Europe/Berlin")
+    defaults = obj._default_context_kwargs()
+    obj._patch_new_context_defaults(fake_browser)
+
+    async def run():
+        return await fake_browser.new_page()
+
+    page = asyncio.run(run())
+
+    assert page is fake_page
+    original_new_page.assert_awaited_once_with(**defaults)

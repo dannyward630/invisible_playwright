@@ -228,6 +228,49 @@ def test_enter_without_profile_dir_calls_launch_not_persistent(tmp_path, monkeyp
 
 
 @pytest.mark.unit
+def test_browser_new_page_gets_profile_defaults(monkeypatch):
+    """Browser.new_page() is the README path and the common snippet path.
+    It must receive the same profile-derived defaults as new_context(), not
+    Playwright's generic 1280x720 defaults."""
+    from unittest.mock import MagicMock
+
+    fake_page = MagicMock(name="page")
+    original_new_page = MagicMock(name="new_page", return_value=fake_page)
+    fake_browser = MagicMock(name="browser")
+    fake_browser.new_context = MagicMock(name="new_context")
+    fake_browser.new_page = original_new_page
+
+    obj = InvisiblePlaywright(seed=42, locale="de-DE", timezone="Europe/Berlin")
+    defaults = obj._default_context_kwargs()
+    obj._patch_new_context_defaults(fake_browser)
+
+    page = fake_browser.new_page()
+
+    assert page is fake_page
+    original_new_page.assert_called_once_with(**defaults)
+
+
+@pytest.mark.unit
+def test_browser_new_page_user_kwargs_override_defaults(monkeypatch):
+    from unittest.mock import MagicMock
+
+    original_new_page = MagicMock(name="new_page", return_value=MagicMock())
+    fake_browser = MagicMock(name="browser")
+    fake_browser.new_context = MagicMock(name="new_context")
+    fake_browser.new_page = original_new_page
+
+    obj = InvisiblePlaywright(seed=42)
+    obj._patch_new_context_defaults(fake_browser)
+
+    fake_browser.new_page(viewport={"width": 800, "height": 600}, locale="fr-FR")
+
+    call_kwargs = original_new_page.call_args.kwargs
+    assert call_kwargs["viewport"] == {"width": 800, "height": 600}
+    assert call_kwargs["locale"] == "fr-FR"
+    assert call_kwargs["screen"] == obj._default_context_kwargs()["screen"]
+
+
+@pytest.mark.unit
 def test_persistent_context_user_data_dir_is_created_if_missing(tmp_path, monkeypatch):
     """First-run scenario: the directory the user names doesn't exist yet.
     __enter__ must mkdir -p it (Playwright won't, and would crash with

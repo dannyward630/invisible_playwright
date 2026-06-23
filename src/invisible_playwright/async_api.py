@@ -149,7 +149,8 @@ class InvisiblePlaywright:
         return self._browser
 
     def _patch_new_context_defaults(self, browser: Browser) -> None:
-        original = browser.new_context
+        original_new_context = browser.new_context
+        original_new_page = browser.new_page
         defaults = self._default_context_kwargs()
         prep = self._prep_recaptcha
         profile = self._profile  # pass the whole Profile (seed + browsing_history)
@@ -158,14 +159,25 @@ class InvisiblePlaywright:
         async def patched(**kw):
             merged = dict(defaults)
             merged.update(kw)
-            ctx = await original(**merged)
+            ctx = await original_new_context(**merged)
             _patch_new_page_sleep(ctx)
             if prep:
                 from ._recaptcha_seed import seed_recaptcha_cookies_async
                 await seed_recaptcha_cookies_async(ctx, profile, timezone=tz)
             return ctx
 
+        async def patched_new_page(**kw):
+            merged = dict(defaults)
+            merged.update(kw)
+            page = await original_new_page(**merged)
+            await asyncio.sleep(0.4)
+            if prep:
+                from ._recaptcha_seed import seed_recaptcha_cookies_async
+                await seed_recaptcha_cookies_async(page.context, profile, timezone=tz)
+            return page
+
         browser.new_context = patched  # type: ignore[assignment]
+        browser.new_page = patched_new_page  # type: ignore[assignment]
 
     def _default_context_kwargs(self) -> Dict[str, Any]:
         p = self._profile

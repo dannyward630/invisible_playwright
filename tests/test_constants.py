@@ -107,6 +107,15 @@ def test_archive_name_arm64_supported(machine):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("machine", ["arm64", "aarch64"])
+def test_archive_name_windows_arm64_uses_x86_64_asset(machine):
+    """Windows releases are x86_64-only today. Windows on ARM can run that
+    archive under emulation, so ARM hosts must not synthesize a win-arm64
+    asset name that no release publishes."""
+    assert ARCHIVE_NAME("win32", machine) == "firefox-150.0.1-stealth-win-x86_64.zip"
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize("platform_key", ["freebsd", "cygwin", "openbsd"])
 def test_archive_name_rejects_unsupported_platforms(platform_key):
     """win32/linux/darwin are supported; other platforms must raise, not
@@ -171,7 +180,7 @@ def test_release_url_points_at_owned_repo():
     """The template MUST point at an owner/repo the maintainer actually
     controls. A typo here would direct everyone's downloads at a stranger's
     GitHub account — silent supply-chain risk."""
-    assert "/feder-cr/invisible_playwright/" in RELEASE_URL_TEMPLATE, (
+    assert "/dannyward630/invisible_playwright/" in RELEASE_URL_TEMPLATE, (
         f"RELEASE_URL_TEMPLATE was changed to point elsewhere: "
         f"{RELEASE_URL_TEMPLATE!r}. Update this test only if the move is intentional."
     )

@@ -264,7 +264,8 @@ class InvisiblePlaywright:
         profile (viewport, screen, DPR, color-scheme). Users get a
         coherent context for free; explicit kwargs still override.
         """
-        original = browser.new_context
+        original_new_context = browser.new_context
+        original_new_page = browser.new_page
         defaults = self._default_context_kwargs()
         prep = self._prep_recaptcha
         profile = self._profile  # pass the whole Profile (seed + browsing_history)
@@ -273,14 +274,26 @@ class InvisiblePlaywright:
         def patched(**kw):
             merged = dict(defaults)
             merged.update(kw)  # user-supplied wins
-            ctx = original(**merged)
+            ctx = original_new_context(**merged)
             _patch_sync_new_page_sleep(ctx)
             if prep:
                 from ._recaptcha_seed import seed_recaptcha_cookies_sync
                 seed_recaptcha_cookies_sync(ctx, profile, timezone=tz)
             return ctx
 
+        def patched_new_page(**kw):
+            import time as _time
+            merged = dict(defaults)
+            merged.update(kw)
+            page = original_new_page(**merged)
+            _time.sleep(0.4)
+            if prep:
+                from ._recaptcha_seed import seed_recaptcha_cookies_sync
+                seed_recaptcha_cookies_sync(page.context, profile, timezone=tz)
+            return page
+
         browser.new_context = patched  # type: ignore[assignment]
+        browser.new_page = patched_new_page  # type: ignore[assignment]
 
     def _default_context_kwargs(self) -> Dict[str, Any]:
         p = self._profile
@@ -410,4 +423,3 @@ class InvisiblePlaywright:
         if self._humanize is True:
             return 1.5
         return float(self._humanize)
-

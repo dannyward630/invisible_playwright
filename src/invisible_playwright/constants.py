@@ -39,6 +39,11 @@ def ARCHIVE_NAME(platform_key: str, machine: str) -> str:
         raise NotImplementedError(f"unsupported arch: {machine}")
 
     if pk == "win32":
+        # We ship a Windows x86_64 archive only. Windows on ARM runs x86_64
+        # desktop apps under emulation, so arm64 hosts should fetch the same
+        # tested archive instead of constructing a non-existent win-arm64 URL.
+        if arch == "arm64":
+            arch = "x86_64"
         return f"{BINARY_BASENAME}-win-{arch}.zip"
     if pk == "linux":
         return f"{BINARY_BASENAME}-linux-{arch}.tar.gz"
@@ -58,7 +63,7 @@ BINARY_ENTRY_REL = {
 
 # GitHub release URL template. The "TODO" owner is resolved at publication time.
 RELEASE_URL_TEMPLATE = (
-    "https://github.com/feder-cr/invisible_playwright/releases/download/{tag}/{asset}"
+    "https://github.com/dannyward630/invisible_playwright/releases/download/{tag}/{asset}"
 )
 
 # ─────────────────────────────────────────────────────────────────────────
