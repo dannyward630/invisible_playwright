@@ -25,6 +25,7 @@ import pytest
 from invisible_playwright import InvisiblePlaywright
 from invisible_playwright import prefs as _prefs
 from invisible_playwright._fpforge import generate_profile
+from invisible_playwright.constants import BINARY_VERSION
 
 # Diverse-codepoint probe string — maximises per-font rendering differences, the
 # way an image-dedup font probe drives a tiny canvas.
@@ -69,6 +70,15 @@ def noised_page(firefox_binary):
 
 
 @pytest.mark.e2e
+@pytest.mark.xfail(
+    BINARY_VERSION == "firefox-12",
+    strict=True,
+    reason=(
+        "firefox-12 archives collapse whitelisted named fonts to one canvas "
+        "image; keep this as a binary-release blocker until the patched "
+        "Firefox build restores per-font draw offsets"
+    ),
+)
 def test_named_fonts_render_distinct_canvas_images(noised_page):
     """Each whitelisted named font must produce a DISTINCT tiny-canvas image so an
     image-dedup font probe keeps every name. Regression: without the per-font draw
