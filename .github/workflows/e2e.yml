@@ -9,10 +9,10 @@
 # server) that's exactly what we get on a headless CI box — stable, and the same
 # thing webrtc-e2e.yml already relies on.
 #
-# Secret-free, so it's safe in public CI: the binary is the PUBLIC firefox-9
-# release (no token), and the webrtc e2e fake a local TCP-only SOCKS. The proxy
-# realness gate (fppro / smartproxy) is NOT here — it needs secrets and stays a
-# local pre-release gate.
+# Secret-free, so it's safe in public CI: the binary is the current public
+# release fetched by the wrapper (no token), and the WebRTC e2e tests use a
+# local TCP-only SOCKS proxy. The proxy realness gate (fppro / smartproxy) is
+# NOT here — it needs secrets and stays a local pre-release gate.
 # ─────────────────────────────────────────────────────────────────────────────
 name: e2e
 

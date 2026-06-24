@@ -256,6 +256,7 @@ def test_doctor_subcommand_outputs_diagnostics(tmp_path, monkeypatch, capsys):
     assert data["timezone"] == "Europe/Warsaw"
     assert data["egressIp"] == "203.0.113.7"
     assert data["locale"] == "pl-PL"
+    assert data["acceptLanguage"] == "pl-PL, pl"
     assert data["binaryPath"] == str(fake_binary)
     assert data["releaseUrl"].startswith("https://github.com/dannyward630/invisible_playwright/")
 

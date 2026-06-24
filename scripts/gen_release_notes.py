@@ -85,7 +85,7 @@ def build_body(tag: str, current_sha: str, bullets: list[str]) -> str:
         "Most people won't grab these by hand. The wrapper fetches the right one for "
         "your platform on first run:",
         "",
-        "    pip install git+https://github.com/feder-cr/invisible_playwright",
+        "    pip install git+https://github.com/dannyward630/invisible_playwright",
         "",
         "If you do download manually, `checksums.txt` has the SHA256s. The macOS builds "
         "are ad-hoc signed (not notarized), so clear the quarantine flag: "

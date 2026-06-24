@@ -113,6 +113,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     proxy = _proxy_from_args(args)
     try:
         from ._geo import prepare_session_geo, resolve_session_locale
+        from .prefs import accept_language_header
 
         geo = prepare_session_geo(args.timezone, proxy)
         locale = resolve_session_locale(args.locale, geo.timezone)
@@ -130,6 +131,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
             "timezone": geo.timezone,
             "egressIp": geo.egress_ip,
             "locale": locale,
+            "acceptLanguage": accept_language_header(locale),
         }
         if not args.skip_binary:
             report["binaryPath"] = str(ensure_binary())

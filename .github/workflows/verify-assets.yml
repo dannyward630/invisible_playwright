@@ -6,8 +6,8 @@
 # DRAFT releases too via GITHUB_TOKEN) and drives each one on its native runner.
 #
 # Use it to:
-#   • drive-test a release that was built before the in-pipeline gate existed
-#     (e.g. firefox-9, built on the old release.yml), or
+#   • drive-test a release that was built before the in-pipeline gate existed,
+#     or
 #   • re-verify any shipped release on demand (regression check).
 #
 # Same single-source-of-truth drive logic as release.yml: scripts/ci_drive_gate.py.
@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'release tag whose assets to drive-test (e.g. firefox-9)'
+        description: 'release tag whose assets to drive-test (e.g. firefox-12)'
         required: true
 
 permissions:

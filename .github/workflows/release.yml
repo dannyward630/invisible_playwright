@@ -33,7 +33,7 @@ on:
         description: 'invisible_firefox ref to build'
         default: 'stealth/150'
       release_tag:
-        description: 'release tag to publish the draft under (e.g. firefox-9)'
+        description: 'release tag to publish the draft under (e.g. firefox-13)'
         required: true
 
 env:

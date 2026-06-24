@@ -4,8 +4,8 @@ Thanks for your interest in improving this project. Contributions are welcome vi
 
 ## Quick links
 
-- **Bug?** Open a [bug report](https://github.com/feder-cr/invisible_playwright/issues/new?template=bug_report.yml).
-- **Idea?** Open a [feature request](https://github.com/feder-cr/invisible_playwright/issues/new?template=feature_request.yml).
+- **Bug?** Open a [bug report](https://github.com/dannyward630/invisible_playwright/issues/new/choose).
+- **Idea?** Open a [feature request](https://github.com/dannyward630/invisible_playwright/issues/new?template=feature_request.yml).
 - **Security issue?** Do **not** open a public issue — see [SECURITY.md](SECURITY.md).
 - **The C++ patches** live in the companion repo [feder-cr/invisible_firefox](https://github.com/feder-cr/invisible_firefox) (branch `stealth/150`). Bugs in fingerprint spoofing usually belong there.
 
@@ -27,7 +27,7 @@ Out of scope (belongs in `invisible_firefox`):
 ## Development setup
 
 ```bash
-git clone https://github.com/feder-cr/invisible_playwright.git
+git clone https://github.com/dannyward630/invisible_playwright.git
 cd invisible_playwright
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
@@ -63,7 +63,7 @@ CI must be green before merge.
 
 Before opening, please:
 
-- Search [existing issues](https://github.com/feder-cr/invisible_playwright/issues) — the bug may already be tracked.
+- Search [existing issues](https://github.com/dannyward630/invisible_playwright/issues) — the bug may already be tracked.
 - Reproduce on the **latest release** if possible.
 - Confirm the issue is in the Python wrapper, not the patched Firefox itself. If a fingerprint is leaking or a detector flags the browser, open the issue at `feder-cr/invisible_firefox` instead.
 

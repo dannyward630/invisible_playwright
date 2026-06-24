@@ -227,7 +227,7 @@ invisible_playwright fetch --force  # re-download even if cached
 invisible_playwright path           # print the absolute path to the cached binary
 invisible_playwright version        # wrapper and binary versions
 invisible_playwright launch-config  # JSON launch/context options for Node/TS
-invisible_playwright doctor         # JSON release/proxy/timezone/locale diagnostics
+invisible_playwright doctor         # JSON release/proxy/timezone/locale/header diagnostics
 invisible_playwright clear-cache    # remove all cached binaries
 ```
 

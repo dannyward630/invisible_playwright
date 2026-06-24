@@ -18,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 - Pins `BINARY_VERSION = firefox-12` (the build with the cross-OS render-parity patches).
 - New runtime dependencies: `requests[socks]` (SOCKS egress lookup), `maxminddb` (mmdb reader), `tzdata` (IANA database for `zoneinfo`, which Windows lacks).
+- Context defaults now include an explicit `Accept-Language` header matching the resolved locale, and `launch-config` emits the same value in `contextOptions.extraHTTPHeaders` for Node/TypeScript callers.
+- Public maintenance links now point at the maintained `dannyward630/invisible_playwright` fork.
 
 ## [0.2.0] - 2026-05-28
 
@@ -131,6 +133,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - SOCKS5 / SOCKS4 / HTTP / HTTPS proxy support with auth.
 - Linux x86_64 and Windows x86_64 binary support.
 
-[Unreleased]: https://github.com/feder-cr/invisible_playwright/compare/v0.1.1...HEAD
-[0.1.1]: https://github.com/feder-cr/invisible_playwright/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/feder-cr/invisible_playwright/releases/tag/v0.1.0
+[Unreleased]: https://github.com/dannyward630/invisible_playwright/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/dannyward630/invisible_playwright/releases/tag/v0.2.0
+[0.1.8]: https://github.com/dannyward630/invisible_playwright/releases/tag/v0.1.8
+[0.1.7]: https://github.com/dannyward630/invisible_playwright/releases/tag/v0.1.7
+[0.1.6]: https://github.com/dannyward630/invisible_playwright/releases/tag/v0.1.6
+[0.1.5]: https://github.com/dannyward630/invisible_playwright/releases/tag/v0.1.5
+[0.1.4]: https://github.com/dannyward630/invisible_playwright/releases/tag/v0.1.4
+[0.1.3]: https://github.com/dannyward630/invisible_playwright/releases/tag/v0.1.3
+[0.1.2]: https://github.com/dannyward630/invisible_playwright/releases/tag/v0.1.2
+[0.1.1]: https://github.com/dannyward630/invisible_playwright/releases/tag/v0.1.1
+[0.1.0]: https://github.com/dannyward630/invisible_playwright/releases/tag/v0.1.0

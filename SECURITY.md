@@ -15,8 +15,7 @@ Only the latest release on `main` receives security fixes.
 
 Use one of the following private channels:
 
-1. **GitHub Private Vulnerability Reporting** (preferred): open an advisory at https://github.com/feder-cr/invisible_playwright/security/advisories/new
-2. **Email**: `federico.elia.majo@gmail.com` with subject prefix `[security][invisible_playwright]`
+1. **GitHub Private Vulnerability Reporting**: open an advisory at https://github.com/dannyward630/invisible_playwright/security/advisories/new
 
 Please include:
 
