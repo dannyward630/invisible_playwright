@@ -325,7 +325,12 @@ def test_doctor_direct_proxy_reports_not_configured(monkeypatch, capsys):
 class _FakeResponse:
     status = 200
     ok = True
-    headers = {"content-type": "application/json"}
+    url = "https://tls.peet.ws/api/all"
+    headers = {
+        "content-type": "application/json",
+        "server": "test-edge",
+        "set-cookie": "secret=value",
+    }
 
     def text(self):
         return '{"tls": {"ja4": "t13d1617h2"}, "http2": {"akamai_fingerprint": "x"}}'
@@ -359,9 +364,38 @@ class _FakePage:
     url = "https://tls.peet.ws/api/all"
     context = _FakeContext()
 
+    def __init__(self):
+        self.response_handlers = []
+        self.clicks = []
+        self.waits = []
+
+    def on(self, event, handler):
+        assert event == "response"
+        self.response_handlers.append(handler)
+
     def goto(self, url, wait_until, timeout):
         self.seen_goto = (url, wait_until, timeout)
-        return _FakeResponse()
+        response = _FakeResponse()
+        for handler in self.response_handlers:
+            handler(response)
+        return response
+
+    def click(self, selector, timeout=0):
+        self.clicks.append((selector, timeout))
+        response = _FakeResponse()
+        response.url = "https://example.test/login"
+        response.status = 403
+        response.ok = False
+        response.headers = {
+            "content-type": "text/html",
+            "server": "AkamaiGHost",
+            "set-cookie": "blocked=secret",
+        }
+        for handler in self.response_handlers:
+            handler(response)
+
+    def wait_for_timeout(self, timeout):
+        self.waits.append(timeout)
 
     def title(self):
         return "probe"
@@ -412,8 +446,13 @@ def test_network_probe_outputs_browser_network_diagnostics(monkeypatch, capsys):
     assert data["finalUrl"] == "https://tls.peet.ws/api/all"
     assert data["status"] == 200
     assert data["ok"] is True
+    assert data["headers"]["server"] == "test-edge"
+    assert data["headers"]["set-cookie"] == "[redacted]"
     assert data["proxyConfigured"] is True
     assert data["bodyJson"]["tls"]["ja4"] == "t13d1617h2"
+    assert data["responses"][0]["headers"]["set-cookie"] == "[redacted]"
+    assert data["responsesTruncated"] is False
+    assert data["responsesDropped"] == 0
     assert data["cookieCount"] == 1
     assert data["cookies"][0]["name"] == "_abck"
     assert data["cookies"][0]["valueLength"] == 6
@@ -451,6 +490,8 @@ class _FakeTextPage(_FakePage):
         self.seen_goto = (url, wait_until, timeout)
         response = _FakeResponse()
         response.headers = {"content-type": "text/html"}
+        for handler in self.response_handlers:
+            handler(response)
         return response
 
     def locator(self, selector):
@@ -480,6 +521,51 @@ def test_network_probe_reports_text_body_sample(monkeypatch, capsys):
     data = json.loads(captured.out)
     assert data["bodyTextSample"] == "Forb"
     assert "bodyJson" not in data
+
+
+@pytest.mark.unit
+def test_network_probe_clicks_selector_and_records_post_click_response(monkeypatch, capsys):
+    _FakeInvisiblePlaywright.instances = []
+    monkeypatch.setattr(cli, "InvisiblePlaywright", _FakeInvisiblePlaywright)
+
+    rc = cli.main([
+        "network-probe",
+        "https://example.test/login",
+        "--click-selector", "input[name=btnSubmit]",
+        "--wait-after-click", "0.5",
+    ])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    data = json.loads(captured.out)
+    assert data["clickSelector"] == "input[name=btnSubmit]"
+    assert data["responses"][-1]["url"] == "https://example.test/login"
+    assert data["responses"][-1]["status"] == 403
+    assert data["responses"][-1]["ok"] is False
+    assert data["responses"][-1]["headers"]["server"] == "AkamaiGHost"
+    assert data["responses"][-1]["headers"]["set-cookie"] == "[redacted]"
+    page = _FakeInvisiblePlaywright.instances[0].page
+    assert page.clicks == [("input[name=btnSubmit]", 45000)]
+    assert page.waits == [500]
+
+
+@pytest.mark.unit
+def test_network_probe_response_log_respects_limit(monkeypatch, capsys):
+    _FakeInvisiblePlaywright.instances = []
+    monkeypatch.setattr(cli, "InvisiblePlaywright", _FakeInvisiblePlaywright)
+
+    rc = cli.main([
+        "network-probe",
+        "--click-selector", "button",
+        "--max-responses", "1",
+    ])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    data = json.loads(captured.out)
+    assert len(data["responses"]) == 1
+    assert data["responsesTruncated"] is True
+    assert data["responsesDropped"] == 1
 
 
 class _FailingInvisiblePlaywright:

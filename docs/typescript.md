@@ -124,8 +124,10 @@ Notes:
   fast before JSON is emitted.
 - `python -m invisible_playwright network-probe` launches the same patched
   Firefox path and emits browser-side status, final URL, TLS/HTTP fingerprint
-  JSON when the response body is JSON, and cookie metadata. It is useful when a
-  Node/TypeScript integration needs to compare its target-site result against
-  the wrapper's direct browser network behavior.
+  JSON when the response body is JSON, cookie metadata, and a bounded response
+  timeline with `Set-Cookie` redacted. Add `--click-selector` to reproduce a
+  button or form-submit path before collecting the final report. It is useful
+  when a Node/TypeScript integration needs to compare its target-site result
+  against the wrapper's direct browser network behavior.
 - For exact reproducibility, pass `--seed`. Without it, each config command
   samples a fresh profile.

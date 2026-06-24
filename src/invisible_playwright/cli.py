@@ -163,6 +163,26 @@ def _cookie_report(cookie: dict[str, Any], *, include_values: bool) -> dict[str,
     return report
 
 
+def _redacted_headers(headers: dict[str, str]) -> dict[str, str]:
+    redacted = {}
+    for key, value in headers.items():
+        if key.lower() == "set-cookie":
+            redacted[key] = "[redacted]"
+        else:
+            redacted[key] = value
+    return redacted
+
+
+def _response_report(response: Any) -> dict[str, Any]:
+    headers = getattr(response, "headers", {}) or {}
+    return {
+        "url": getattr(response, "url", ""),
+        "status": getattr(response, "status", None),
+        "ok": bool(getattr(response, "ok", False)),
+        "headers": _redacted_headers(headers),
+    }
+
+
 def _cmd_network_probe(args: argparse.Namespace) -> int:
     proxy = _proxy_from_args(args)
     try:
@@ -175,11 +195,26 @@ def _cmd_network_probe(args: argparse.Namespace) -> int:
             binary_path=args.binary_path,
         ) as browser:
             page = browser.new_page()
+            responses: list[dict[str, Any]] = []
+            responses_dropped = 0
+
+            def on_response(response: Any) -> None:
+                nonlocal responses_dropped
+                if len(responses) < args.max_responses:
+                    responses.append(_response_report(response))
+                else:
+                    responses_dropped += 1
+
+            page.on("response", on_response)
             response = page.goto(
                 args.url,
                 wait_until=args.wait_until,
                 timeout=int(args.timeout * 1000),
             )
+            if args.click_selector:
+                page.click(args.click_selector, timeout=int(args.timeout * 1000))
+                if args.wait_after_click > 0:
+                    page.wait_for_timeout(int(args.wait_after_click * 1000))
             status = response.status if response is not None else None
             headers = response.headers if response is not None else {}
             content_type = headers.get("content-type") or headers.get("Content-Type") or ""
@@ -202,11 +237,17 @@ def _cmd_network_probe(args: argparse.Namespace) -> int:
                 "status": status,
                 "ok": bool(response.ok) if response is not None else False,
                 "contentType": content_type,
+                "headers": _redacted_headers(headers),
                 "title": title,
                 "proxyConfigured": proxy_is_set(proxy),
                 "cookieCount": len(cookies),
                 "cookies": cookies,
+                "responses": responses,
+                "responsesTruncated": responses_dropped > 0,
+                "responsesDropped": responses_dropped,
             }
+            if args.click_selector:
+                report["clickSelector"] = args.click_selector
             if body_json is not None:
                 report["bodyJson"] = body_json
             else:
@@ -303,6 +344,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Playwright page.goto wait state",
     )
     probe_p.add_argument("--timeout", type=float, default=45.0, help="navigation timeout in seconds")
+    probe_p.add_argument(
+        "--click-selector",
+        help="optional selector to click after the initial navigation, useful for submit/button diagnostics",
+    )
+    probe_p.add_argument(
+        "--wait-after-click",
+        type=float,
+        default=2.0,
+        help="seconds to wait after --click-selector before collecting final state",
+    )
+    probe_p.add_argument(
+        "--max-responses",
+        type=int,
+        default=50,
+        help="maximum response summaries to include in the report",
+    )
     probe_p.add_argument(
         "--body-sample-chars",
         type=int,

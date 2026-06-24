@@ -258,6 +258,22 @@ Cookie values are redacted by default; the report includes names, domains, and
 value lengths. Use `--include-cookie-values` only when you intentionally want a
 local, secret-bearing dump.
 
+For submit flows, add `--click-selector` and the probe records a bounded
+response timeline after the click. This is useful for cases where a detector
+passes JavaScript checks but the POST is blocked at the edge:
+
+```bash
+invisible_playwright network-probe "https://target.example/login" \
+  --click-selector "input[name=btnSubmit]" \
+  --wait-after-click 3 \
+  --max-responses 100 \
+  --pretty
+```
+
+Response headers are included with `Set-Cookie` redacted, so headers such as
+`Server: AkamaiGHost` and redirects can be inspected without dumping cookie
+secrets by default.
+
 ## Related projects
 
 invisible_playwright takes a different angle than the major Firefox-hardening projects but stands on their shoulders:
