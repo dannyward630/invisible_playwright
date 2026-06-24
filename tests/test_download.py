@@ -136,6 +136,28 @@ def test_extract_tar_gz(tmp_path):
     assert (dst / "firefox").read_bytes() == b"ELF!"
 
 
+@pytest.mark.unit
+def test_extract_zip_rejects_parent_traversal(tmp_path):
+    """A compromised zip asset must not write outside the cache directory."""
+    archive = tmp_path / "evil.zip"
+    _make_zip(archive, "../escape.txt", b"bad")
+    dst = tmp_path / "out"
+
+    with pytest.raises(RuntimeError, match="unsafe zip member"):
+        _extract(archive, dst)
+    assert not (tmp_path / "escape.txt").exists()
+
+
+@pytest.mark.unit
+def test_extract_zip_rejects_absolute_paths(tmp_path):
+    archive = tmp_path / "absolute.zip"
+    _make_zip(archive, "/tmp/escape.txt", b"bad")
+    dst = tmp_path / "out"
+
+    with pytest.raises(RuntimeError, match="unsafe zip member"):
+        _extract(archive, dst)
+
+
 # DL3: checksum line with comment (#) is skipped
 @pytest.mark.unit
 def test_parse_checksums_skips_comments_and_blanks():

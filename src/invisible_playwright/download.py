@@ -114,6 +114,13 @@ def _extract(archive: Path, dst: Path) -> None:
     dst.mkdir(parents=True, exist_ok=True)
     if archive.suffix == ".zip":
         with zipfile.ZipFile(archive) as zf:
+            dst_resolved = dst.resolve()
+            for info in zf.infolist():
+                target = (dst / info.filename).resolve()
+                if target != dst_resolved and dst_resolved not in target.parents:
+                    raise RuntimeError(
+                        f"unsafe zip member path outside destination: {info.filename!r}"
+                    )
             zf.extractall(dst)
     elif archive.name.endswith(".tar.gz") or archive.suffix in {".tgz", ".gz"}:
         with tarfile.open(archive, "r:gz") as tf:

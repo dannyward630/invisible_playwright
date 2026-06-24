@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - New runtime dependencies: `requests[socks]` (SOCKS egress lookup), `maxminddb` (mmdb reader), `tzdata` (IANA database for `zoneinfo`, which Windows lacks).
 - Context defaults now include an explicit `Accept-Language` header matching the resolved locale, and `launch-config` emits the same value in `contextOptions.extraHTTPHeaders` for Node/TypeScript callers.
 - Python packaging now pins `playwright==1.55.0`, matching the patched Firefox Juggler protocol version enforced by CI and `scripts/playwright_pin.txt`.
+- Binary zip extraction now rejects archive members that would escape the cache directory.
 - Public maintenance links now point at the maintained `dannyward630/invisible_playwright` fork.
 
 ## [0.2.0] - 2026-05-28
