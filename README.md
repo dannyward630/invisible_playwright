@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Firefox 150.0.1](https://img.shields.io/badge/firefox-150.0.1-orange.svg)](https://www.mozilla.org/firefox/)
-[![binary release](https://img.shields.io/github/v/release/feder-cr/invisible_playwright.svg?label=binary%20release)](https://github.com/feder-cr/invisible_playwright/releases)
+[![binary release](https://img.shields.io/github/v/release/dannyward630/invisible_playwright.svg?label=binary%20release)](https://github.com/dannyward630/invisible_playwright/releases)
 [![GitHub stars](https://img.shields.io/github/stars/dannyward630/invisible_playwright.svg?style=social)](https://github.com/dannyward630/invisible_playwright/stargazers)
 [![browser launches](https://img.shields.io/github/downloads/feder-cr/invisible_firefox/usage-counter/total?label=browser%20launches&color=blue)](https://github.com/feder-cr/invisible_firefox/releases/tag/usage-counter)
 
