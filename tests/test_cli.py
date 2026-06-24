@@ -29,6 +29,7 @@ def test_help_subcommand():
     assert "path" in r.stdout
     assert "clear-cache" in r.stdout
     assert "launch-config" in r.stdout
+    assert "doctor" in r.stdout
 
 
 # CL1: clear-cache with existing cache prints "removed:" + path
@@ -191,3 +192,61 @@ def test_launch_config_subcommand_accepts_json_overlays(tmp_path, capsys):
     assert prefs["zoom.stealth.hw_concurrency"] == 16
     assert prefs["custom.pref"] == "ok"
     assert prefs["stealthfox.humanize"] is False
+
+
+@pytest.mark.unit
+def test_doctor_subcommand_outputs_diagnostics(tmp_path, monkeypatch, capsys):
+    from invisible_playwright._geo import SessionGeo
+
+    fake_binary = tmp_path / "firefox"
+    fake_binary.write_text("x")
+
+    monkeypatch.setattr(
+        "invisible_playwright._geo.prepare_session_geo",
+        lambda timezone, proxy: SessionGeo("Europe/Warsaw", "203.0.113.7"),
+    )
+    monkeypatch.setattr("invisible_playwright.cli.ensure_binary", lambda: fake_binary)
+
+    rc = cli.main([
+        "doctor",
+        "--locale", "auto",
+        "--timezone", "auto",
+        "--proxy-server", "socks5://gw.example:1080",
+    ])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert captured.err == ""
+    data = json.loads(captured.out)
+    assert data["binaryVersion"].startswith("firefox-")
+    assert data["playwrightVersion"]
+    assert data["proxyConfigured"] is True
+    assert data["timezone"] == "Europe/Warsaw"
+    assert data["egressIp"] == "203.0.113.7"
+    assert data["locale"] == "pl-PL"
+    assert data["binaryPath"] == str(fake_binary)
+    assert data["releaseUrl"].startswith("https://github.com/dannyward630/invisible_playwright/")
+
+
+@pytest.mark.unit
+def test_doctor_skip_binary_avoids_fetch(monkeypatch, capsys):
+    from invisible_playwright._geo import SessionGeo
+
+    monkeypatch.setattr(
+        "invisible_playwright._geo.prepare_session_geo",
+        lambda timezone, proxy: SessionGeo("America/New_York", None),
+    )
+
+    def boom():
+        raise AssertionError("ensure_binary should not be called")
+
+    monkeypatch.setattr("invisible_playwright.cli.ensure_binary", boom)
+
+    rc = cli.main(["doctor", "--skip-binary"])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    data = json.loads(captured.out)
+    assert data["timezone"] == "America/New_York"
+    assert data["locale"] == "en-US"
+    assert "binaryPath" not in data

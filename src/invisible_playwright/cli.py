@@ -3,13 +3,31 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
 import shutil
 import sys
 
 from . import __version__
 from .config import build_playwright_launch_config
-from .constants import BINARY_VERSION, FIREFOX_UPSTREAM_VERSION
+from .constants import (
+    ARCHIVE_NAME,
+    BINARY_VERSION,
+    FIREFOX_UPSTREAM_VERSION,
+    PLAYWRIGHT_DRIVER_VERSION,
+    RELEASE_URL_TEMPLATE,
+)
 from .download import cache_root, ensure_binary
+
+
+def _proxy_from_args(args: argparse.Namespace) -> dict | None:
+    proxy = None
+    if args.proxy_server:
+        proxy = {"server": args.proxy_server}
+        if args.proxy_username:
+            proxy["username"] = args.proxy_username
+        if args.proxy_password:
+            proxy["password"] = args.proxy_password
+    return proxy
 
 
 def _cmd_fetch(args: argparse.Namespace) -> int:
@@ -63,13 +81,7 @@ def _json_obj(value: str) -> dict:
 
 
 def _cmd_launch_config(args: argparse.Namespace) -> int:
-    proxy = None
-    if args.proxy_server:
-        proxy = {"server": args.proxy_server}
-        if args.proxy_username:
-            proxy["username"] = args.proxy_username
-        if args.proxy_password:
-            proxy["password"] = args.proxy_password
+    proxy = _proxy_from_args(args)
     humanize: bool | float
     if args.no_humanize:
         humanize = False
@@ -94,6 +106,38 @@ def _cmd_launch_config(args: argparse.Namespace) -> int:
         return 1
     indent = 2 if args.pretty else None
     print(json.dumps(config, indent=indent, sort_keys=True))
+    return 0
+
+
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    proxy = _proxy_from_args(args)
+    try:
+        from ._geo import prepare_session_geo, resolve_session_locale
+
+        geo = prepare_session_geo(args.timezone, proxy)
+        locale = resolve_session_locale(args.locale, geo.timezone)
+        asset = ARCHIVE_NAME(sys.platform, platform.machine())
+        report = {
+            "wrapperVersion": __version__,
+            "binaryVersion": BINARY_VERSION,
+            "firefoxVersion": FIREFOX_UPSTREAM_VERSION,
+            "playwrightVersion": PLAYWRIGHT_DRIVER_VERSION,
+            "platform": sys.platform,
+            "machine": platform.machine(),
+            "archive": asset,
+            "releaseUrl": RELEASE_URL_TEMPLATE.format(tag=BINARY_VERSION, asset=asset),
+            "proxyConfigured": proxy is not None,
+            "timezone": geo.timezone,
+            "egressIp": geo.egress_ip,
+            "locale": locale,
+        }
+        if not args.skip_binary:
+            report["binaryPath"] = str(ensure_binary())
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    indent = 2 if args.pretty else None
+    print(json.dumps(report, indent=indent, sort_keys=True))
     return 0
 
 
@@ -135,6 +179,21 @@ def build_parser() -> argparse.ArgumentParser:
     cfg_p.add_argument("--no-humanize", action="store_true", help="disable Bezier mouse humanization")
     cfg_p.add_argument("--humanize-max", type=float, help="max humanized mouse move time in seconds")
     cfg_p.add_argument("--pretty", action="store_true", help="pretty-print JSON")
+    doctor_p = sub.add_parser(
+        "doctor",
+        help="emit JSON diagnostics for release, binary, proxy egress, timezone, and locale",
+    )
+    doctor_p.add_argument(
+        "--locale",
+        default="en-US",
+        help='BCP-47 locale, e.g. en-US, or "auto" to derive it from --timezone',
+    )
+    doctor_p.add_argument("--timezone", default="", help="IANA timezone, e.g. America/New_York")
+    doctor_p.add_argument("--proxy-server", help="proxy server URL, e.g. socks5://host:1080")
+    doctor_p.add_argument("--proxy-username", help="proxy username")
+    doctor_p.add_argument("--proxy-password", help="proxy password")
+    doctor_p.add_argument("--skip-binary", action="store_true", help="do not fetch or inspect the binary cache")
+    doctor_p.add_argument("--pretty", action="store_true", help="pretty-print JSON")
     return p
 
 
@@ -147,13 +206,14 @@ def main(argv: list[str] | None = None) -> int:
         # the top-level `--version` flag (argparse demands a subcommand even
         # when --version is the only token). parser.error() preserves the
         # original "no subcommand" exit semantics tests expect.
-        parser.error("a subcommand is required (try --help, --version, or one of: fetch, path, version, clear-cache)")
+        parser.error("a subcommand is required (try --help, --version, or one of: fetch, path, version, clear-cache, launch-config, doctor)")
     dispatch = {
         "fetch": _cmd_fetch,
         "path": _cmd_path,
         "version": _cmd_version,
         "clear-cache": _cmd_clear_cache,
         "launch-config": _cmd_launch_config,
+        "doctor": _cmd_doctor,
     }
     return dispatch[args.cmd](args)
 
