@@ -8,6 +8,7 @@ from invisible_playwright import (
     get_default_args,
     get_default_stealth_prefs,
 )
+from invisible_playwright._proxy import ProxyConfigError
 from invisible_playwright.config import get_default_stealth_prefs as _direct
 
 
@@ -207,6 +208,18 @@ def test_build_playwright_launch_config_keeps_http_proxy_for_playwright(tmp_path
 
     assert cfg["launchOptions"]["proxy"] is proxy
     assert "network.proxy.socks" not in cfg["launchOptions"]["firefoxUserPrefs"]
+
+
+def test_build_playwright_launch_config_rejects_invalid_proxy(tmp_path):
+    fake_binary = tmp_path / "firefox"
+    fake_binary.write_text("x")
+
+    with pytest.raises(ProxyConfigError, match="must include a scheme"):
+        build_playwright_launch_config(
+            seed=42,
+            binary_path=fake_binary,
+            proxy={"server": "proxy.example:8080"},
+        )
 
 
 def test_build_playwright_launch_config_resolves_auto_timezone(tmp_path, monkeypatch):

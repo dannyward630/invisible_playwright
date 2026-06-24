@@ -204,6 +204,25 @@ def test_launch_config_subcommand_auto_timezone_resolves(tmp_path, monkeypatch, 
 
 
 @pytest.mark.unit
+def test_launch_config_subcommand_rejects_invalid_proxy(tmp_path, capsys):
+    fake_binary = tmp_path / "firefox"
+    fake_binary.write_text("x")
+
+    rc = cli.main([
+        "launch-config",
+        "--seed", "42",
+        "--binary-path", str(fake_binary),
+        "--proxy-server", "proxy.example:8080",
+    ])
+
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert captured.out == ""
+    assert "error:" in captured.err
+    assert "must include a scheme" in captured.err
+
+
+@pytest.mark.unit
 def test_launch_config_subcommand_accepts_json_overlays(tmp_path, capsys):
     fake_binary = tmp_path / "firefox"
     fake_binary.write_text("x")
@@ -283,3 +302,20 @@ def test_doctor_skip_binary_avoids_fetch(monkeypatch, capsys):
     assert data["timezone"] == "America/New_York"
     assert data["locale"] == "en-US"
     assert "binaryPath" not in data
+
+
+@pytest.mark.unit
+def test_doctor_direct_proxy_reports_not_configured(monkeypatch, capsys):
+    from invisible_playwright._geo import SessionGeo
+
+    monkeypatch.setattr(
+        "invisible_playwright._geo.prepare_session_geo",
+        lambda timezone, proxy: SessionGeo("America/New_York", None),
+    )
+
+    rc = cli.main(["doctor", "--skip-binary", "--proxy-server", "direct://"])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    data = json.loads(captured.out)
+    assert data["proxyConfigured"] is False

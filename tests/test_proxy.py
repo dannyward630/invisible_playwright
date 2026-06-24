@@ -5,7 +5,7 @@ SOCKS4/5/default, HTTP/HTTPS, case variants, malformed, mutation contract.
 """
 import pytest
 
-from invisible_playwright._proxy import configure_proxy
+from invisible_playwright._proxy import ProxyConfigError, configure_proxy
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -153,11 +153,10 @@ def test_cp13_socks_scheme_is_case_insensitive():
 
 
 @pytest.mark.unit
-def test_cp14_socks_without_port_dropped_silently():
+def test_cp14_socks_without_port_raises_clear_error():
     prefs = {}
-    result = configure_proxy({"server": "socks5://hostonly"}, prefs)
-    assert result is None
-    # Malformed input drops silently — no mutations.
+    with pytest.raises(ProxyConfigError, match="must include a port"):
+        configure_proxy({"server": "socks5://hostonly"}, prefs)
     assert "network.proxy.type" not in prefs
     assert "network.proxy.socks" not in prefs
 
@@ -259,8 +258,50 @@ def test_socks_port_coerced_to_int():
 
 
 @pytest.mark.unit
-def test_socks_non_numeric_port_raises_value_error():
-    """Non-numeric port is a programmer error — int() raises."""
+def test_socks_non_numeric_port_raises_proxy_config_error():
+    """Non-numeric port gets reported as a proxy configuration error."""
     prefs = {}
-    with pytest.raises(ValueError):
+    with pytest.raises(ProxyConfigError, match="invalid port"):
         configure_proxy({"server": "socks5://host:notaport"}, prefs)
+
+
+@pytest.mark.unit
+def test_socks_port_out_of_range_raises_proxy_config_error():
+    prefs = {}
+    with pytest.raises(ProxyConfigError, match="invalid port"):
+        configure_proxy({"server": "socks5://host:99999"}, prefs)
+
+
+@pytest.mark.unit
+def test_proxy_without_scheme_raises_proxy_config_error():
+    prefs = {}
+    with pytest.raises(ProxyConfigError, match="must include a scheme"):
+        configure_proxy({"server": "host:8080"}, prefs)
+
+
+@pytest.mark.unit
+def test_proxy_unsupported_scheme_raises_proxy_config_error():
+    prefs = {}
+    with pytest.raises(ProxyConfigError, match="scheme must be one of"):
+        configure_proxy({"server": "ftp://host:2121"}, prefs)
+
+
+@pytest.mark.unit
+def test_proxy_with_embedded_credentials_raises_proxy_config_error():
+    prefs = {}
+    with pytest.raises(ProxyConfigError, match="username/password fields"):
+        configure_proxy({"server": "socks5://u:p@host:1080"}, prefs)
+
+
+@pytest.mark.unit
+def test_proxy_with_path_raises_proxy_config_error():
+    prefs = {}
+    with pytest.raises(ProxyConfigError, match="path, query, or fragment"):
+        configure_proxy({"server": "http://host:8080/proxy"}, prefs)
+
+
+@pytest.mark.unit
+def test_direct_with_host_raises_proxy_config_error():
+    prefs = {}
+    with pytest.raises(ProxyConfigError, match="exactly"):
+        configure_proxy({"server": "direct://host"}, prefs)

@@ -118,5 +118,9 @@ Notes:
   from bare `Intl.*().resolvedOptions().locale`.
 - SOCKS proxies are written into Firefox prefs. HTTP and HTTPS proxies are
   returned as Playwright `proxy` launch options.
+- Proxy servers must include an explicit scheme and port, such as
+  `socks5://gw.example:1080` or `http://gw.example:8080`; unsupported schemes,
+  bare `host:port` values, embedded credentials, and path/query fragments fail
+  fast before JSON is emitted.
 - For exact reproducibility, pass `--seed`. Without it, each config command
   samples a fresh profile.

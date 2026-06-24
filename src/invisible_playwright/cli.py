@@ -17,6 +17,7 @@ from .constants import (
     RELEASE_URL_TEMPLATE,
 )
 from .download import cache_root, ensure_binary
+from ._proxy import proxy_is_set
 
 
 def _proxy_from_args(args: argparse.Namespace) -> dict | None:
@@ -127,7 +128,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
             "machine": platform.machine(),
             "archive": asset,
             "releaseUrl": RELEASE_URL_TEMPLATE.format(tag=BINARY_VERSION, asset=asset),
-            "proxyConfigured": proxy is not None,
+            "proxyConfigured": proxy_is_set(proxy),
             "timezone": geo.timezone,
             "egressIp": geo.egress_ip,
             "locale": locale,

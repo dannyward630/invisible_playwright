@@ -21,6 +21,7 @@ from invisible_playwright._geo import (
     resolve_session_locale,
     resolve_session_timezone,
 )
+from invisible_playwright._proxy import ProxyConfigError
 
 SOCKS = {"server": "socks5://gw.example:1080", "username": "u", "password": "p"}
 HTTP = {"server": "http://gw.example:8080", "username": "u", "password": "p"}
@@ -71,9 +72,9 @@ def test_proxies_http_and_https_schemes():
 
 
 @pytest.mark.unit
-def test_proxies_no_scheme_defaults_to_http():
-    out = _proxies_for_requests({"server": "gw.example:3128"})
-    assert out["http"] == "http://gw.example:3128"
+def test_proxies_no_scheme_raises_proxy_config_error():
+    with pytest.raises(ProxyConfigError, match="must include a scheme"):
+        _proxies_for_requests({"server": "gw.example:3128"})
 
 
 @pytest.mark.unit
@@ -90,6 +91,17 @@ def test_proxies_credentials_are_url_encoded():
 def test_proxies_no_credentials_has_no_auth_prefix():
     out = _proxies_for_requests({"server": "socks5://gw:1080"})
     assert out["http"] == "socks5h://gw:1080"
+
+
+@pytest.mark.unit
+def test_proxies_invalid_port_raises_proxy_config_error():
+    with pytest.raises(ProxyConfigError, match="invalid port"):
+        _proxies_for_requests({"server": "http://gw:bad"})
+
+
+@pytest.mark.unit
+def test_proxies_direct_returns_empty_mapping():
+    assert _proxies_for_requests({"server": "direct://"}) == {}
 
 
 # ──────────────────────────────────────────────────────────────────────

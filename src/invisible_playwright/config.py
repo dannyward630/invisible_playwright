@@ -43,7 +43,7 @@ from ._fpforge import generate_profile
 from ._webgl_personas import forced_gpu_class
 from ._geo import SessionGeo, prepare_session_geo, resolve_session_locale
 from ._headless import cloak_prefs
-from ._proxy import configure_proxy
+from ._proxy import configure_proxy, proxy_is_set
 from .constants import BINARY_VERSION, PLAYWRIGHT_DRIVER_VERSION
 from .download import ensure_binary
 from .launcher import _CHROME_H, _CHROME_W, _TASKBAR_H, _tz_env
@@ -158,7 +158,7 @@ def _resolve_launch_geo(timezone: str, proxy: Optional[Dict[str, str]]) -> Sessi
     not get invalid ``timezoneId="auto"`` or a missing WebRTC egress override.
     """
     tz = (timezone or "").strip()
-    proxy_set = bool(proxy and (proxy.get("server") or "").strip().lower() != "direct://")
+    proxy_set = proxy_is_set(proxy)
     if not tz and not proxy_set:
         return SessionGeo("", None)
     if tz and tz.lower() != "auto" and not proxy_set:

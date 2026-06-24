@@ -27,6 +27,8 @@ from urllib.parse import quote
 
 import requests
 
+from ._proxy import parse_proxy, proxy_is_set
+
 
 class GeoTimezoneError(RuntimeError):
     """Raised when ``timezone="auto"`` cannot resolve a valid IANA zone."""
@@ -38,8 +40,6 @@ _IP_ECHO_ENDPOINTS = (
     "https://icanhazip.com",
     "https://checkip.amazonaws.com",
 )
-
-_SOCKS_SCHEMES = ("socks5://", "socks4://", "socks://")
 
 _TIMEZONE_LOCALES = {
     "America/New_York": "en-US",
@@ -94,10 +94,7 @@ _TIMEZONE_LOCALES = {
 
 
 def _proxy_is_set(proxy: Optional[Dict[str, str]]) -> bool:
-    if not proxy:
-        return False
-    server = (proxy.get("server") or "").strip()
-    return bool(server) and server.lower() != "direct://"
+    return proxy_is_set(proxy)
 
 
 def _proxies_for_requests(proxy: Dict[str, str]) -> Dict[str, str]:
@@ -107,18 +104,19 @@ def _proxies_for_requests(proxy: Dict[str, str]) -> Dict[str, str]:
     ``network.proxy.socks_remote_dns=True`` in the Firefox path). HTTP/HTTPS
     pass through unchanged. Credentials are URL-encoded.
     """
-    server = (proxy.get("server") or "").strip()
-    low = server.lower()
-    if low.startswith("socks5://") or low.startswith("socks://"):
+    parsed = parse_proxy(proxy)
+    if parsed is None:
+        return {}
+    if parsed.scheme in {"socks5", "socks"}:
         scheme = "socks5h"
-    elif low.startswith("socks4://"):
+    elif parsed.scheme == "socks4":
         scheme = "socks4"
-    elif low.startswith("https://"):
+    elif parsed.scheme == "https":
         scheme = "https"
     else:
         scheme = "http"
 
-    host_port = server.split("://", 1)[1] if "://" in server else server
+    host_port = f"{parsed.host}:{parsed.port}"
     user = proxy.get("username") or ""
     pwd = proxy.get("password") or ""
     if user:

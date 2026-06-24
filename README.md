@@ -138,7 +138,13 @@ with InvisiblePlaywright(proxy=proxy) as browser:
     ...
 ```
 
-Schemes supported: `socks5`, `socks4`, `http`, `https`. Auth works on all of them (SOCKS5 via patched `nsProtocolProxyService.cpp`, HTTP/HTTPS via Playwright). DNS is routed through the proxy by default, no local leak.
+Schemes supported: `socks5`, `socks4`, `http`, `https`; use `direct://` to
+force no proxy. Proxy servers must include an explicit scheme and port (for
+example `socks5://gate.example.com:1080`). Auth works on all real proxy
+schemes (SOCKS5 via patched `nsProtocolProxyService.cpp`, HTTP/HTTPS via
+Playwright). Malformed URLs, unsupported schemes, embedded credentials, and
+path/query fragments fail fast with a proxy configuration error. DNS is routed
+through the proxy by default, no local leak.
 
 ### Timezone
 

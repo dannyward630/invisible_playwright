@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Python packaging now pins `playwright==1.55.0`, matching the patched Firefox Juggler protocol version enforced by CI and `scripts/playwright_pin.txt`.
 - Binary zip extraction now rejects archive members that would escape the cache directory.
 - Public maintenance links now point at the maintained `dannyward630/invisible_playwright` fork.
+- Proxy configuration now validates scheme, host, port, credentials placement, and path/query fragments consistently across Python launch, Node/TypeScript launch-config JSON, and egress-IP diagnostics.
 
 ## [0.2.0] - 2026-05-28
 
