@@ -30,6 +30,7 @@ def test_help_subcommand():
     assert "clear-cache" in r.stdout
     assert "launch-config" in r.stdout
     assert "doctor" in r.stdout
+    assert "network-probe" in r.stdout
 
 
 # CL1: clear-cache with existing cache prints "removed:" + path
@@ -319,3 +320,186 @@ def test_doctor_direct_proxy_reports_not_configured(monkeypatch, capsys):
     assert rc == 0
     data = json.loads(captured.out)
     assert data["proxyConfigured"] is False
+
+
+class _FakeResponse:
+    status = 200
+    ok = True
+    headers = {"content-type": "application/json"}
+
+    def text(self):
+        return '{"tls": {"ja4": "t13d1617h2"}, "http2": {"akamai_fingerprint": "x"}}'
+
+
+class _FakeLocator:
+    def __init__(self, text):
+        self._text = text
+
+    def inner_text(self, timeout=0):
+        return self._text
+
+
+class _FakeContext:
+    def cookies(self):
+        return [
+            {
+                "name": "_abck",
+                "value": "abc123",
+                "domain": ".example.test",
+                "path": "/",
+                "expires": 0,
+                "secure": True,
+                "httpOnly": False,
+                "sameSite": "Lax",
+            }
+        ]
+
+
+class _FakePage:
+    url = "https://tls.peet.ws/api/all"
+    context = _FakeContext()
+
+    def goto(self, url, wait_until, timeout):
+        self.seen_goto = (url, wait_until, timeout)
+        return _FakeResponse()
+
+    def title(self):
+        return "probe"
+
+    def locator(self, selector):
+        assert selector == "body"
+        return _FakeLocator('{"tls": {"ja4": "t13d1617h2"}, "http2": {"akamai_fingerprint": "x"}}')
+
+
+class _FakeInvisiblePlaywright:
+    instances = []
+
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.page = _FakePage()
+        self.instances.append(self)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def new_page(self):
+        return self.page
+
+
+@pytest.mark.unit
+def test_network_probe_outputs_browser_network_diagnostics(monkeypatch, capsys):
+    _FakeInvisiblePlaywright.instances = []
+    monkeypatch.setattr(cli, "InvisiblePlaywright", _FakeInvisiblePlaywright)
+
+    rc = cli.main([
+        "network-probe",
+        "--seed", "42",
+        "--locale", "auto",
+        "--timezone", "Europe/Warsaw",
+        "--proxy-server", "socks5://gw.example:1080",
+        "--binary-path", "/tmp/firefox",
+        "--pretty",
+    ])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert captured.err == ""
+    data = json.loads(captured.out)
+    assert data["url"] == "https://tls.peet.ws/api/all"
+    assert data["finalUrl"] == "https://tls.peet.ws/api/all"
+    assert data["status"] == 200
+    assert data["ok"] is True
+    assert data["proxyConfigured"] is True
+    assert data["bodyJson"]["tls"]["ja4"] == "t13d1617h2"
+    assert data["cookieCount"] == 1
+    assert data["cookies"][0]["name"] == "_abck"
+    assert data["cookies"][0]["valueLength"] == 6
+    assert "value" not in data["cookies"][0]
+    instance = _FakeInvisiblePlaywright.instances[0]
+    assert instance.kwargs["seed"] == 42
+    assert instance.kwargs["locale"] == "auto"
+    assert instance.kwargs["timezone"] == "Europe/Warsaw"
+    assert instance.kwargs["proxy"] == {"server": "socks5://gw.example:1080"}
+    assert instance.kwargs["binary_path"] == "/tmp/firefox"
+    assert instance.page.seen_goto == (
+        "https://tls.peet.ws/api/all",
+        "domcontentloaded",
+        45000,
+    )
+
+
+@pytest.mark.unit
+def test_network_probe_can_include_cookie_values(monkeypatch, capsys):
+    _FakeInvisiblePlaywright.instances = []
+    monkeypatch.setattr(cli, "InvisiblePlaywright", _FakeInvisiblePlaywright)
+
+    rc = cli.main(["network-probe", "--include-cookie-values"])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    data = json.loads(captured.out)
+    assert data["cookies"][0]["value"] == "abc123"
+
+
+class _FakeTextPage(_FakePage):
+    url = "https://example.test/login"
+
+    def goto(self, url, wait_until, timeout):
+        self.seen_goto = (url, wait_until, timeout)
+        response = _FakeResponse()
+        response.headers = {"content-type": "text/html"}
+        return response
+
+    def locator(self, selector):
+        assert selector == "body"
+        return _FakeLocator("Forbidden")
+
+
+class _FakeTextBrowser(_FakeInvisiblePlaywright):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.page = _FakeTextPage()
+
+
+@pytest.mark.unit
+def test_network_probe_reports_text_body_sample(monkeypatch, capsys):
+    _FakeTextBrowser.instances = []
+    monkeypatch.setattr(cli, "InvisiblePlaywright", _FakeTextBrowser)
+
+    rc = cli.main([
+        "network-probe",
+        "https://example.test/login",
+        "--body-sample-chars", "4",
+    ])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    data = json.loads(captured.out)
+    assert data["bodyTextSample"] == "Forb"
+    assert "bodyJson" not in data
+
+
+class _FailingInvisiblePlaywright:
+    def __init__(self, **kwargs):
+        pass
+
+    def __enter__(self):
+        raise RuntimeError("launch failed")
+
+    def __exit__(self, *args):
+        return False
+
+
+@pytest.mark.unit
+def test_network_probe_errors_cleanly(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "InvisiblePlaywright", _FailingInvisiblePlaywright)
+
+    rc = cli.main(["network-probe"])
+
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert captured.out == ""
+    assert "error: launch failed" in captured.err

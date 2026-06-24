@@ -6,6 +6,7 @@ import json
 import platform
 import shutil
 import sys
+from typing import Any
 
 from . import __version__
 from .config import build_playwright_launch_config
@@ -17,6 +18,7 @@ from .constants import (
     RELEASE_URL_TEMPLATE,
 )
 from .download import cache_root, ensure_binary
+from .launcher import InvisiblePlaywright
 from ._proxy import proxy_is_set
 
 
@@ -144,6 +146,80 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cookie_report(cookie: dict[str, Any], *, include_values: bool) -> dict[str, Any]:
+    value = cookie.get("value") or ""
+    report = {
+        "name": cookie.get("name"),
+        "domain": cookie.get("domain"),
+        "path": cookie.get("path"),
+        "expires": cookie.get("expires"),
+        "secure": cookie.get("secure"),
+        "httpOnly": cookie.get("httpOnly"),
+        "sameSite": cookie.get("sameSite"),
+        "valueLength": len(value),
+    }
+    if include_values:
+        report["value"] = value
+    return report
+
+
+def _cmd_network_probe(args: argparse.Namespace) -> int:
+    proxy = _proxy_from_args(args)
+    try:
+        with InvisiblePlaywright(
+            seed=args.seed,
+            locale=args.locale,
+            timezone=args.timezone,
+            headless=args.headless,
+            proxy=proxy,
+            binary_path=args.binary_path,
+        ) as browser:
+            page = browser.new_page()
+            response = page.goto(
+                args.url,
+                wait_until=args.wait_until,
+                timeout=int(args.timeout * 1000),
+            )
+            status = response.status if response is not None else None
+            headers = response.headers if response is not None else {}
+            content_type = headers.get("content-type") or headers.get("Content-Type") or ""
+            title = page.title()
+            if response is not None and "json" in content_type.lower():
+                body_text = response.text()
+            else:
+                body_text = page.locator("body").inner_text(timeout=5000)
+            try:
+                body_json: Any = json.loads(body_text)
+            except json.JSONDecodeError:
+                body_json = None
+            cookies = [
+                _cookie_report(cookie, include_values=args.include_cookie_values)
+                for cookie in page.context.cookies()
+            ]
+            report: dict[str, Any] = {
+                "url": args.url,
+                "finalUrl": page.url,
+                "status": status,
+                "ok": bool(response.ok) if response is not None else False,
+                "contentType": content_type,
+                "title": title,
+                "proxyConfigured": proxy_is_set(proxy),
+                "cookieCount": len(cookies),
+                "cookies": cookies,
+            }
+            if body_json is not None:
+                report["bodyJson"] = body_json
+            else:
+                report["bodyTextSample"] = body_text[: args.body_sample_chars]
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+    indent = 2 if args.pretty else None
+    print(json.dumps(report, indent=indent, sort_keys=True))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="invisible-playwright", description="invisible_playwright CLI")
     # Top-level `--version` / `-V` flag so `python -m invisible_playwright --version`
@@ -197,6 +273,48 @@ def build_parser() -> argparse.ArgumentParser:
     doctor_p.add_argument("--proxy-password", help="proxy password")
     doctor_p.add_argument("--skip-binary", action="store_true", help="do not fetch or inspect the binary cache")
     doctor_p.add_argument("--pretty", action="store_true", help="pretty-print JSON")
+    probe_p = sub.add_parser(
+        "network-probe",
+        help="launch patched Firefox and emit JSON network/TLS/cookie diagnostics for a URL",
+    )
+    probe_p.add_argument(
+        "url",
+        nargs="?",
+        default="https://tls.peet.ws/api/all",
+        help="URL to probe; defaults to tls.peet.ws browser TLS fingerprint JSON",
+    )
+    probe_p.add_argument("--seed", type=int, help="deterministic fingerprint seed")
+    probe_p.add_argument(
+        "--locale",
+        default="en-US",
+        help='BCP-47 locale, e.g. en-US, or "auto" to derive it from --timezone',
+    )
+    probe_p.add_argument("--timezone", default="", help="IANA timezone, e.g. America/New_York")
+    probe_p.add_argument("--headless", action="store_true",
+                         help="wrapper-style hidden headed mode; Linux callers must provide Xvfb")
+    probe_p.add_argument("--binary-path", help="use an existing Firefox binary instead of fetching")
+    probe_p.add_argument("--proxy-server", help="proxy server URL, e.g. socks5://host:1080")
+    probe_p.add_argument("--proxy-username", help="proxy username")
+    probe_p.add_argument("--proxy-password", help="proxy password")
+    probe_p.add_argument(
+        "--wait-until",
+        choices=("commit", "domcontentloaded", "load", "networkidle"),
+        default="domcontentloaded",
+        help="Playwright page.goto wait state",
+    )
+    probe_p.add_argument("--timeout", type=float, default=45.0, help="navigation timeout in seconds")
+    probe_p.add_argument(
+        "--body-sample-chars",
+        type=int,
+        default=4000,
+        help="max non-JSON body characters included in the report",
+    )
+    probe_p.add_argument(
+        "--include-cookie-values",
+        action="store_true",
+        help="include raw cookie values in output; default only reports value lengths",
+    )
+    probe_p.add_argument("--pretty", action="store_true", help="pretty-print JSON")
     return p
 
 
@@ -209,7 +327,10 @@ def main(argv: list[str] | None = None) -> int:
         # the top-level `--version` flag (argparse demands a subcommand even
         # when --version is the only token). parser.error() preserves the
         # original "no subcommand" exit semantics tests expect.
-        parser.error("a subcommand is required (try --help, --version, or one of: fetch, path, version, clear-cache, launch-config, doctor)")
+        parser.error(
+            "a subcommand is required (try --help, --version, or one of: "
+            "fetch, path, version, clear-cache, launch-config, doctor, network-probe)"
+        )
     dispatch = {
         "fetch": _cmd_fetch,
         "path": _cmd_path,
@@ -217,6 +338,7 @@ def main(argv: list[str] | None = None) -> int:
         "clear-cache": _cmd_clear_cache,
         "launch-config": _cmd_launch_config,
         "doctor": _cmd_doctor,
+        "network-probe": _cmd_network_probe,
     }
     return dispatch[args.cmd](args)
 

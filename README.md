@@ -234,8 +234,29 @@ invisible_playwright path           # print the absolute path to the cached bina
 invisible_playwright version        # wrapper and binary versions
 invisible_playwright launch-config  # JSON launch/context options for Node/TS
 invisible_playwright doctor         # JSON release/proxy/timezone/locale/header diagnostics
+invisible_playwright network-probe  # browser-side TLS/HTTP/cookie diagnostics
 invisible_playwright clear-cache    # remove all cached binaries
 ```
+
+`network-probe` launches the patched Firefox and visits a URL with the same
+wrapper, proxy, locale, timezone, and binary options as a normal session. By
+default it probes `https://tls.peet.ws/api/all`, which returns browser-observed
+TLS/HTTP fingerprint JSON. For site-specific debugging, pass the page or action
+URL plus the same proxy arguments you use in production:
+
+```bash
+invisible_playwright network-probe \
+  --proxy-server socks5://gate.example.com:1080 \
+  --proxy-username "$PROXY_USER" \
+  --proxy-password "$PROXY_PASS" \
+  --locale auto \
+  --timezone auto \
+  --pretty
+```
+
+Cookie values are redacted by default; the report includes names, domains, and
+value lengths. Use `--include-cookie-values` only when you intentionally want a
+local, secret-bearing dump.
 
 ## Related projects
 

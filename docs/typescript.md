@@ -122,5 +122,10 @@ Notes:
   `socks5://gw.example:1080` or `http://gw.example:8080`; unsupported schemes,
   bare `host:port` values, embedded credentials, and path/query fragments fail
   fast before JSON is emitted.
+- `python -m invisible_playwright network-probe` launches the same patched
+  Firefox path and emits browser-side status, final URL, TLS/HTTP fingerprint
+  JSON when the response body is JSON, and cookie metadata. It is useful when a
+  Node/TypeScript integration needs to compare its target-site result against
+  the wrapper's direct browser network behavior.
 - For exact reproducibility, pass `--seed`. Without it, each config command
   samples a fresh profile.
