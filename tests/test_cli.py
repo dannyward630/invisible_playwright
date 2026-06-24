@@ -1,5 +1,6 @@
 import subprocess
 import sys
+import json
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,7 @@ def test_help_subcommand():
     assert "fetch" in r.stdout
     assert "path" in r.stdout
     assert "clear-cache" in r.stdout
+    assert "launch-config" in r.stdout
 
 
 # CL1: clear-cache with existing cache prints "removed:" + path
@@ -120,3 +122,51 @@ def test_fetch_subcommand_prints_path(tmp_path, monkeypatch, capsys):
     captured = capsys.readouterr()
     assert rc == 0
     assert str(fake_binary) in captured.out
+
+
+@pytest.mark.unit
+def test_launch_config_subcommand_outputs_json(tmp_path, capsys):
+    fake_binary = tmp_path / "firefox"
+    fake_binary.write_text("x")
+
+    rc = cli.main([
+        "launch-config",
+        "--seed", "42",
+        "--locale", "de-DE",
+        "--timezone", "Europe/Berlin",
+        "--binary-path", str(fake_binary),
+    ])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert captured.err == ""
+    data = json.loads(captured.out)
+    assert data["seed"] == 42
+    assert data["launchOptions"]["executablePath"] == str(fake_binary)
+    assert data["launchOptions"]["headless"] is False
+    assert data["launchOptions"]["env"]["TZ"] == "Europe/Berlin"
+    assert data["contextOptions"]["locale"] == "de-DE"
+    assert data["contextOptions"]["timezoneId"] == "Europe/Berlin"
+
+
+@pytest.mark.unit
+def test_launch_config_subcommand_accepts_json_overlays(tmp_path, capsys):
+    fake_binary = tmp_path / "firefox"
+    fake_binary.write_text("x")
+
+    rc = cli.main([
+        "launch-config",
+        "--seed", "42",
+        "--binary-path", str(fake_binary),
+        "--pin-json", '{"hardware.concurrency": 16}',
+        "--extra-prefs-json", '{"custom.pref": "ok"}',
+        "--no-humanize",
+    ])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    data = json.loads(captured.out)
+    prefs = data["launchOptions"]["firefoxUserPrefs"]
+    assert prefs["zoom.stealth.hw_concurrency"] == 16
+    assert prefs["custom.pref"] == "ok"
+    assert prefs["stealthfox.humanize"] is False

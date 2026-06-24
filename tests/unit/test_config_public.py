@@ -3,6 +3,7 @@
 import pytest
 
 from invisible_playwright import (
+    build_playwright_launch_config,
     ensure_binary,
     get_default_args,
     get_default_stealth_prefs,
@@ -123,3 +124,67 @@ def test_ensure_binary_is_callable_via_public_namespace():
     # verify the public attribute is the same callable as the underlying.
     from invisible_playwright.download import ensure_binary as _direct_eb
     assert ensure_binary is _direct_eb
+
+
+def test_build_playwright_launch_config_is_deterministic(tmp_path):
+    fake_binary = tmp_path / "firefox"
+    fake_binary.write_text("x")
+
+    a = build_playwright_launch_config(
+        seed=42,
+        locale="de-DE",
+        timezone="Europe/Berlin",
+        binary_path=fake_binary,
+    )
+    b = build_playwright_launch_config(
+        seed=42,
+        locale="de-DE",
+        timezone="Europe/Berlin",
+        binary_path=fake_binary,
+    )
+
+    assert a == b
+    assert a["seed"] == 42
+    assert a["playwrightVersion"]
+    assert a["launchOptions"]["executablePath"] == str(fake_binary)
+    assert a["launchOptions"]["headless"] is False
+    assert a["launchOptions"]["env"]["TZ"] == "Europe/Berlin"
+    assert a["contextOptions"]["locale"] == "de-DE"
+    assert a["contextOptions"]["timezoneId"] == "Europe/Berlin"
+    assert a["contextOptions"]["viewport"]["width"] > 0
+    assert a["contextOptions"]["screen"]["width"] > 0
+    assert "firefoxUserPrefs" in a["launchOptions"]
+
+
+def test_build_playwright_launch_config_routes_socks_proxy_to_prefs(tmp_path):
+    fake_binary = tmp_path / "firefox"
+    fake_binary.write_text("x")
+
+    cfg = build_playwright_launch_config(
+        seed=42,
+        binary_path=fake_binary,
+        proxy={
+            "server": "socks5://proxy.example:1080",
+            "username": "u",
+            "password": "p",
+        },
+    )
+
+    launch = cfg["launchOptions"]
+    prefs = launch["firefoxUserPrefs"]
+    assert "proxy" not in launch
+    assert prefs["network.proxy.socks"] == "proxy.example"
+    assert prefs["network.proxy.socks_port"] == 1080
+    assert prefs["network.proxy.socks_username"] == "u"
+    assert prefs["network.proxy.socks_password"] == "p"
+
+
+def test_build_playwright_launch_config_keeps_http_proxy_for_playwright(tmp_path):
+    fake_binary = tmp_path / "firefox"
+    fake_binary.write_text("x")
+    proxy = {"server": "http://proxy.example:8080", "username": "u"}
+
+    cfg = build_playwright_launch_config(seed=42, binary_path=fake_binary, proxy=proxy)
+
+    assert cfg["launchOptions"]["proxy"] is proxy
+    assert "network.proxy.socks" not in cfg["launchOptions"]["firefoxUserPrefs"]

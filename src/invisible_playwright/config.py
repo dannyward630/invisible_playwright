@@ -35,10 +35,17 @@ without the lifecycle ownership.
 from __future__ import annotations
 
 import secrets
+import sys
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from ._fpforge import generate_profile
 from ._webgl_personas import forced_gpu_class
+from ._headless import cloak_prefs
+from ._proxy import configure_proxy
+from .constants import BINARY_VERSION, PLAYWRIGHT_DRIVER_VERSION
+from .download import ensure_binary
+from .launcher import _CHROME_H, _CHROME_W, _TASKBAR_H, _tz_env
 from .prefs import translate_profile_to_prefs
 
 
@@ -110,3 +117,93 @@ def get_default_args() -> List[str]:
     *get_default_args()]``.
     """
     return []
+
+
+def _context_options_for_profile(profile: Any, *, locale: str, timezone: str) -> Dict[str, Any]:
+    options: Dict[str, Any] = {
+        "viewport": {
+            "width": profile.screen.width - _CHROME_W,
+            "height": profile.screen.height - _TASKBAR_H - _CHROME_H,
+        },
+        "screen": {"width": profile.screen.width, "height": profile.screen.height},
+        "deviceScaleFactor": profile.screen.dpr,
+        "colorScheme": "dark" if profile.dark_theme else "light",
+    }
+    if locale:
+        options["locale"] = locale
+    if timezone:
+        options["timezoneId"] = timezone
+    return options
+
+
+def build_playwright_launch_config(
+    seed: Optional[int] = None,
+    *,
+    pin: Optional[Dict[str, Any]] = None,
+    locale: str = "en-US",
+    timezone: str = "",
+    extra_prefs: Optional[Dict[str, Any]] = None,
+    humanize: Union[bool, float] = True,
+    headless: bool = False,
+    proxy: Optional[Dict[str, str]] = None,
+    extra_args: Optional[List[str]] = None,
+    binary_path: Optional[Union[str, Path]] = None,
+) -> Dict[str, Any]:
+    """Build a JSON-serializable Playwright config for non-Python callers.
+
+    This is the bridge for TypeScript/JavaScript integrations: callers can use
+    the Python sampler once, then pass the returned ``launchOptions`` to
+    ``firefox.launch()`` and ``contextOptions`` to ``browser.newContext()``.
+    ``headless=True`` follows the wrapper contract: Firefox still launches in
+    headed mode so the rendering pipeline stays realistic. On Linux the caller
+    must provide a virtual display such as ``xvfb-run``; on Windows/macOS the
+    patched binary can cloak the headed window.
+    """
+    resolved_seed = int(seed) if seed is not None else secrets.randbits(31)
+    profile = generate_profile(
+        resolved_seed, pin=pin, fixed_gpu_class=forced_gpu_class(resolved_seed)
+    )
+    prefs = translate_profile_to_prefs(
+        profile,
+        locale=locale,
+        timezone=timezone,
+        extra_prefs=extra_prefs,
+        virtual_display=bool(headless and sys.platform == "win32"),
+    )
+    if headless and sys.platform in ("win32", "darwin"):
+        for key, value in cloak_prefs().items():
+            prefs.setdefault(key, value)
+    prefs["stealthfox.humanize"] = bool(humanize)
+    if humanize:
+        prefs["stealthfox.humanize.maxTime"] = (
+            str(1.5) if isinstance(humanize, bool) else str(float(humanize))
+        )
+
+    playwright_proxy = configure_proxy(proxy, prefs)
+    executable = Path(binary_path) if binary_path is not None else ensure_binary()
+    launch_options: Dict[str, Any] = {
+        "executablePath": str(executable),
+        "headless": False,
+        "firefoxUserPrefs": prefs,
+    }
+    args = list(extra_args or get_default_args())
+    if args:
+        launch_options["args"] = args
+    if playwright_proxy:
+        launch_options["proxy"] = playwright_proxy
+    env: Dict[str, str] = {}
+    if timezone:
+        env["TZ"] = _tz_env(timezone)
+    if env:
+        launch_options["env"] = env
+
+    return {
+        "seed": resolved_seed,
+        "binaryVersion": BINARY_VERSION,
+        "playwrightVersion": PLAYWRIGHT_DRIVER_VERSION,
+        "launchOptions": launch_options,
+        "contextOptions": _context_options_for_profile(
+            profile, locale=locale, timezone=timezone
+        ),
+        "requiresVirtualDisplay": bool(headless and sys.platform == "linux"),
+    }

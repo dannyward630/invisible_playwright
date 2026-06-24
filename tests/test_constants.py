@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from invisible_playwright.constants import (
@@ -7,6 +9,7 @@ from invisible_playwright.constants import (
     BINARY_VERSION,
     BROKEN_VERSIONS,
     FIREFOX_UPSTREAM_VERSION,
+    PLAYWRIGHT_DRIVER_VERSION,
     RELEASE_URL_TEMPLATE,
 )
 
@@ -211,3 +214,9 @@ def test_binary_basename_includes_upstream_version():
 def test_archive_name_includes_upstream_version(plat):
     """Same desync guard, from the other direction."""
     assert FIREFOX_UPSTREAM_VERSION in ARCHIVE_NAME(plat, "x86_64")
+
+
+@pytest.mark.unit
+def test_playwright_driver_version_matches_pin_file():
+    pin = Path("scripts/playwright_pin.txt").read_text().strip()
+    assert PLAYWRIGHT_DRIVER_VERSION == pin

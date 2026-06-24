@@ -61,4 +61,4 @@ Source = "https://github.com/dannyward630/invisible_playwright"
 packages = ["src/invisible_playwright"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/invisible_playwright", "tests", "README.md", "LICENSE", "pyproject.toml"]
+include = ["src/invisible_playwright", "tests", "docs", "examples", "README.md", "LICENSE", "pyproject.toml"]

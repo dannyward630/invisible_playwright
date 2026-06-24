@@ -177,6 +177,22 @@ Full list of pinnable keys, how pinning interacts with the Bayesian sampler, and
 
 ---
 
+### TypeScript / Node
+
+Node and TypeScript callers can use the same patched Firefox binary and sampled
+stealth profile through the JSON launch-config bridge:
+
+```bash
+npm install playwright@1.55.0
+python -m invisible_playwright launch-config --seed 42 --pretty
+```
+
+Pass the returned `launchOptions` to `firefox.launch(...)` and
+`contextOptions` to `browser.newContext(...)`. Full example:
+**[docs/typescript.md](docs/typescript.md)**.
+
+---
+
 ## CLI
 
 ```bash
@@ -184,6 +200,7 @@ invisible_playwright fetch          # download the binary if missing
 invisible_playwright fetch --force  # re-download even if cached
 invisible_playwright path           # print the absolute path to the cached binary
 invisible_playwright version        # wrapper and binary versions
+invisible_playwright launch-config  # JSON launch/context options for Node/TS
 invisible_playwright clear-cache    # remove all cached binaries
 ```
 

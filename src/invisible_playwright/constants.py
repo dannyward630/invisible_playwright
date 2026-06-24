@@ -19,6 +19,11 @@ BROKEN_VERSIONS: frozenset[str] = frozenset({"firefox-8"})
 # Underlying Firefox version (for display only; does not drive downloads).
 FIREFOX_UPSTREAM_VERSION: str = "150.0.1"
 
+# Playwright driver version validated against the patched Firefox Juggler
+# protocol shipped in the current binary release. Newer Node Playwright builds
+# can send protocol fields older patched binaries do not know yet.
+PLAYWRIGHT_DRIVER_VERSION: str = "1.55.0"
+
 # The base filename prefix used inside archives.
 BINARY_BASENAME: str = f"firefox-{FIREFOX_UPSTREAM_VERSION}-stealth"
 

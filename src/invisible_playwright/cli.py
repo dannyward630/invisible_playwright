@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sys
 
 from . import __version__
+from .config import build_playwright_launch_config
 from .constants import BINARY_VERSION, FIREFOX_UPSTREAM_VERSION
 from .download import cache_root, ensure_binary
 
@@ -50,6 +52,51 @@ def _cmd_clear_cache(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _json_obj(value: str) -> dict:
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+    if not isinstance(parsed, dict):
+        raise argparse.ArgumentTypeError("expected a JSON object")
+    return parsed
+
+
+def _cmd_launch_config(args: argparse.Namespace) -> int:
+    proxy = None
+    if args.proxy_server:
+        proxy = {"server": args.proxy_server}
+        if args.proxy_username:
+            proxy["username"] = args.proxy_username
+        if args.proxy_password:
+            proxy["password"] = args.proxy_password
+    humanize: bool | float
+    if args.no_humanize:
+        humanize = False
+    elif args.humanize_max is not None:
+        humanize = args.humanize_max
+    else:
+        humanize = True
+    try:
+        config = build_playwright_launch_config(
+            seed=args.seed,
+            pin=args.pin_json,
+            locale=args.locale,
+            timezone=args.timezone,
+            extra_prefs=args.extra_prefs_json,
+            humanize=humanize,
+            headless=args.headless,
+            proxy=proxy,
+            binary_path=args.binary_path,
+        )
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    indent = 2 if args.pretty else None
+    print(json.dumps(config, indent=indent, sort_keys=True))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="invisible-playwright", description="invisible_playwright CLI")
     # Top-level `--version` / `-V` flag so `python -m invisible_playwright --version`
@@ -66,6 +113,24 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("path", help="print the absolute path to the cached binary")
     sub.add_parser("version", help="print wrapper and binary versions")
     sub.add_parser("clear-cache", help="remove all cached binaries")
+    cfg_p = sub.add_parser(
+        "launch-config",
+        help="emit JSON Playwright launch/context options for Python, Node, or TypeScript callers",
+    )
+    cfg_p.add_argument("--seed", type=int, help="deterministic fingerprint seed")
+    cfg_p.add_argument("--locale", default="en-US", help="BCP-47 locale, e.g. en-US")
+    cfg_p.add_argument("--timezone", default="", help="IANA timezone, e.g. America/New_York")
+    cfg_p.add_argument("--headless", action="store_true",
+                       help="wrapper-style hidden headed mode; Linux callers must provide Xvfb")
+    cfg_p.add_argument("--binary-path", help="use an existing Firefox binary instead of fetching")
+    cfg_p.add_argument("--proxy-server", help="proxy server URL, e.g. socks5://host:1080")
+    cfg_p.add_argument("--proxy-username", help="proxy username")
+    cfg_p.add_argument("--proxy-password", help="proxy password")
+    cfg_p.add_argument("--pin-json", type=_json_obj, help="JSON object of pinned fingerprint fields")
+    cfg_p.add_argument("--extra-prefs-json", type=_json_obj, help="JSON object of extra Firefox prefs")
+    cfg_p.add_argument("--no-humanize", action="store_true", help="disable Bezier mouse humanization")
+    cfg_p.add_argument("--humanize-max", type=float, help="max humanized mouse move time in seconds")
+    cfg_p.add_argument("--pretty", action="store_true", help="pretty-print JSON")
     return p
 
 
@@ -84,6 +149,7 @@ def main(argv: list[str] | None = None) -> int:
         "path": _cmd_path,
         "version": _cmd_version,
         "clear-cache": _cmd_clear_cache,
+        "launch-config": _cmd_launch_config,
     }
     return dispatch[args.cmd](args)
 
