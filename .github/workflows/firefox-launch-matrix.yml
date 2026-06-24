@@ -57,15 +57,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install .
 
-      - name: Fetch firefox-7 binary
-        run: python -m invisible_playwright fetch
+      - name: Fetch published Firefox binary
+        shell: pwsh
+        run: |
+          $ffPath = (python -m invisible_playwright fetch | Select-Object -Last 1).Trim()
+          if (-not (Test-Path $ffPath)) {
+              Write-Error "fetch returned a missing firefox.exe path: $ffPath"
+              exit 1
+          }
+          "FF_PATH=$ffPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Fetched Firefox executable: $ffPath"
 
       - name: Verify firefox.exe can launch standalone (the snippet that fails for issue #22)
         shell: pwsh
         run: |
-          # The platformdirs path has the duplicated `invisible-playwright` segment
-          # on Windows (user_cache_dir convention).
-          $ffPath = "$env:LOCALAPPDATA\invisible-playwright\invisible-playwright\Cache\firefox-7\firefox.exe"
+          $ffPath = $env:FF_PATH
           if (-not (Test-Path $ffPath)) {
               Write-Error "firefox.exe NOT FOUND at $ffPath"
               exit 1
@@ -100,7 +106,6 @@ jobs:
         with:
           name: launch-failure-${{ matrix.os }}-py${{ matrix.python }}
           path: |
-            ${{ env.LOCALAPPDATA }}/invisible-playwright/invisible-playwright/Cache/firefox-7/firefox.exe
-            ${{ env.LOCALAPPDATA }}/invisible-playwright/invisible-playwright/Cache/firefox-7/mozglue.dll
+            ${{ env.LOCALAPPDATA }}/invisible-playwright/invisible-playwright/Cache/
           if-no-files-found: warn
           retention-days: 7
