@@ -457,6 +457,17 @@ def _accept_language(locale: str) -> str:
     return f"{lang}, {base}" if base != lang else lang
 
 
+def accept_language_header(locale: str) -> str:
+    """Return the HTTP ``Accept-Language`` value for a BCP-47 locale.
+
+    Firefox receives the same value through ``intl.accept_languages``. The
+    launchers also pass it as a context header so early navigations, service
+    worker fetches, and non-Python launch-config consumers stay aligned with
+    ``navigator.language`` / ``navigator.languages``.
+    """
+    return _accept_language(locale or "en-US")
+
+
 def _font_metrics_for_platform(profile_metrics: str) -> str:
     """Return ``zoom.stealth.font.metrics`` value.
 
@@ -624,7 +635,7 @@ def translate_profile_to_prefs(
     # Locale prefs.
     locale = locale or "en-US"
     lang = locale.replace("_", "-")
-    prefs["intl.accept_languages"]     = _accept_language(locale)
+    prefs["intl.accept_languages"]     = accept_language_header(locale)
     prefs["general.useragent.locale"]  = lang
     prefs["intl.locale.requested"]     = lang
     prefs["privacy.spoof_english"]     = 0

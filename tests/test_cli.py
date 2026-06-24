@@ -147,6 +147,7 @@ def test_launch_config_subcommand_outputs_json(tmp_path, capsys):
     assert data["launchOptions"]["headless"] is False
     assert data["launchOptions"]["env"]["TZ"] == "Europe/Berlin"
     assert data["contextOptions"]["locale"] == "de-DE"
+    assert data["contextOptions"]["extraHTTPHeaders"]["Accept-Language"] == "de-DE, de"
     assert data["contextOptions"]["timezoneId"] == "Europe/Berlin"
 
 
@@ -167,6 +168,7 @@ def test_launch_config_subcommand_auto_locale_uses_timezone(tmp_path, capsys):
     assert rc == 0
     data = json.loads(captured.out)
     assert data["contextOptions"]["locale"] == "pl-PL"
+    assert data["contextOptions"]["extraHTTPHeaders"]["Accept-Language"] == "pl-PL, pl"
     prefs = data["launchOptions"]["firefoxUserPrefs"]
     assert prefs["intl.accept_languages"] == "pl-PL, pl"
 
@@ -198,6 +200,7 @@ def test_launch_config_subcommand_auto_timezone_resolves(tmp_path, monkeypatch, 
     assert data["launchOptions"]["env"]["TZ"] == "Europe/Zurich"
     assert data["contextOptions"]["timezoneId"] == "Europe/Zurich"
     assert data["contextOptions"]["locale"] == "de-CH"
+    assert data["contextOptions"]["extraHTTPHeaders"]["Accept-Language"] == "de-CH, de"
 
 
 @pytest.mark.unit

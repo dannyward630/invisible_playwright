@@ -156,6 +156,7 @@ def test_build_playwright_launch_config_is_deterministic(tmp_path):
     assert a["launchOptions"]["headless"] is False
     assert a["launchOptions"]["env"]["TZ"] == "Europe/Berlin"
     assert a["contextOptions"]["locale"] == "de-DE"
+    assert a["contextOptions"]["extraHTTPHeaders"]["Accept-Language"] == "de-DE, de"
     assert a["contextOptions"]["timezoneId"] == "Europe/Berlin"
     assert a["contextOptions"]["viewport"]["width"] > 0
     assert a["contextOptions"]["screen"]["width"] > 0
@@ -236,6 +237,7 @@ def test_build_playwright_launch_config_resolves_auto_timezone(tmp_path, monkeyp
     assert cfg["launchOptions"]["env"]["TZ"] == "Europe/Warsaw"
     assert cfg["contextOptions"]["timezoneId"] == "Europe/Warsaw"
     assert cfg["contextOptions"]["locale"] == "pl-PL"
+    assert cfg["contextOptions"]["extraHTTPHeaders"]["Accept-Language"] == "pl-PL, pl"
     assert cfg["launchOptions"]["firefoxUserPrefs"]["intl.accept_languages"] == "pl-PL, pl"
 
 
@@ -287,3 +289,4 @@ def test_build_playwright_launch_config_proxy_sets_webrtc_egress_env(tmp_path, m
     assert env["STEALTHFOX_WEBRTC_PUBLIC_IP"] == "203.0.113.7"
     assert env["STEALTHFOX_WEBRTC_DISABLE_IPV6"] == "1"
     assert cfg["contextOptions"]["locale"] == "en-US"
+    assert cfg["contextOptions"]["extraHTTPHeaders"]["Accept-Language"] == "en-US, en"

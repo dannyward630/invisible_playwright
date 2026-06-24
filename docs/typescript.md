@@ -30,7 +30,9 @@ python -m invisible_playwright launch-config \
 The command emits JSON with:
 
 - `launchOptions`: pass to `firefox.launch(...)`.
-- `contextOptions`: pass to `browser.newContext(...)`.
+- `contextOptions`: pass intact to `browser.newContext(...)`; it carries
+  viewport, screen, timezone, locale, and the matching `Accept-Language`
+  header.
 - `playwrightVersion`: the Node Playwright version validated against the
   current patched Firefox Juggler protocol.
 - `requiresVirtualDisplay`: true when `--headless` was requested on Linux.
@@ -110,9 +112,10 @@ Notes:
 - When proxy arguments are present, the CLI resolves the proxy egress once and
   includes `STEALTHFOX_WEBRTC_PUBLIC_IP` / `STEALTHFOX_WEBRTC_DISABLE_IPV6` in
   `launchOptions.env`, matching the Python wrapper's WebRTC behavior.
-- Auto locale aligns `navigator.language`, `navigator.languages`, and
-  `Accept-Language`; the current patched Firefox build can still report its
-  bundled runtime default from bare `Intl.*().resolvedOptions().locale`.
+- Auto locale aligns `navigator.language`, `navigator.languages`, the Firefox
+  `intl.accept_languages` pref, and the context `Accept-Language` header; the
+  current patched Firefox build can still report its bundled runtime default
+  from bare `Intl.*().resolvedOptions().locale`.
 - SOCKS proxies are written into Firefox prefs. HTTP and HTTPS proxies are
   returned as Playwright `proxy` launch options.
 - For exact reproducibility, pass `--seed`. Without it, each config command

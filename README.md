@@ -206,7 +206,10 @@ python -m invisible_playwright launch-config --seed 42 --pretty
 ```
 
 Pass the returned `launchOptions` to `firefox.launch(...)` and
-`contextOptions` to `browser.newContext(...)`. Full example:
+`contextOptions` to `browser.newContext(...)`. `contextOptions` includes
+viewport, screen, timezone, locale, and the matching `Accept-Language` header;
+pass it intact so early navigation headers stay coherent with JS-visible
+locale. Full example:
 **[docs/typescript.md](docs/typescript.md)**.
 
 `launch-config --timezone auto` resolves the session timezone before printing

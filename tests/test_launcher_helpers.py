@@ -162,13 +162,17 @@ def test_default_context_omits_timezone_when_empty():
 @pytest.mark.unit
 def test_default_context_includes_locale_when_set():
     ip = InvisiblePlaywright(seed=42, locale="de-DE")
-    assert ip._default_context_kwargs()["locale"] == "de-DE"
+    kw = ip._default_context_kwargs()
+    assert kw["locale"] == "de-DE"
+    assert kw["extra_http_headers"]["Accept-Language"] == "de-DE, de"
 
 
 @pytest.mark.unit
 def test_default_context_omits_locale_when_empty():
     ip = InvisiblePlaywright(seed=42, locale="")
-    assert "locale" not in ip._default_context_kwargs()
+    kw = ip._default_context_kwargs()
+    assert "locale" not in kw
+    assert "extra_http_headers" not in kw
 
 
 # ── InvisiblePlaywright._build_env — WebRTC egress auto-derive ─────────

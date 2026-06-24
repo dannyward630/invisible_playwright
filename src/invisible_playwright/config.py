@@ -47,7 +47,7 @@ from ._proxy import configure_proxy
 from .constants import BINARY_VERSION, PLAYWRIGHT_DRIVER_VERSION
 from .download import ensure_binary
 from .launcher import _CHROME_H, _CHROME_W, _TASKBAR_H, _tz_env
-from .prefs import translate_profile_to_prefs
+from .prefs import accept_language_header, translate_profile_to_prefs
 
 
 def get_default_stealth_prefs(
@@ -139,6 +139,9 @@ def _context_options_for_profile(profile: Any, *, locale: str, timezone: str) ->
     }
     if locale:
         options["locale"] = locale
+        options["extraHTTPHeaders"] = {
+            "Accept-Language": accept_language_header(locale)
+        }
     if timezone:
         options["timezoneId"] = timezone
     return options

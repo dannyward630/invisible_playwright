@@ -13,7 +13,7 @@ from ._geo import prepare_session_geo, resolve_session_locale
 from ._headless import cloak_prefs, make_virtual_display
 from ._proxy import configure_proxy as _configure_proxy_shared
 from .download import ensure_binary
-from .prefs import translate_profile_to_prefs
+from .prefs import accept_language_header, translate_profile_to_prefs
 
 
 def _patch_sync_new_page_sleep(ctx: Any) -> None:
@@ -316,6 +316,9 @@ class InvisiblePlaywright:
             kwargs["timezone_id"] = self._timezone
         if self._locale:
             kwargs["locale"] = self._locale
+            kwargs["extra_http_headers"] = {
+                "Accept-Language": accept_language_header(self._locale)
+            }
         return kwargs
 
     def __exit__(self, *exc: Any) -> None:
