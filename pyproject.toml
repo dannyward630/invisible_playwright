@@ -21,7 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "playwright>=1.40",
+    "playwright==1.55.0",
     "platformdirs>=4",
     "requests[socks]>=2.31",
     "maxminddb>=2.2",
@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "pytest-mock>=3", "responses>=0.24", "build>=1", "pytest-rerunfailures>=14", "playwright>=1.40"]
+dev = ["pytest>=7", "pytest-mock>=3", "responses>=0.24", "build>=1", "pytest-rerunfailures>=14", "playwright==1.55.0"]
 
 [tool.pytest.ini_options]
 markers = [

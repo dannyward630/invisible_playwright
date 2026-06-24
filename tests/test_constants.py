@@ -1,4 +1,5 @@
 from pathlib import Path
+import tomllib
 
 import pytest
 
@@ -220,3 +221,18 @@ def test_archive_name_includes_upstream_version(plat):
 def test_playwright_driver_version_matches_pin_file():
     pin = Path("scripts/playwright_pin.txt").read_text().strip()
     assert PLAYWRIGHT_DRIVER_VERSION == pin
+
+
+@pytest.mark.unit
+def test_pyproject_playwright_dependency_is_exact_driver_pin():
+    """The patched Firefox Juggler protocol is validated against one driver.
+
+    A loose ``playwright>=...`` dependency lets fresh installs pick up a newer
+    driver that can send protocol fields the patched binary does not know yet.
+    Keep runtime, dev extra, scripts/playwright_pin.txt and the public constant
+    locked to the same exact version.
+    """
+    data = tomllib.loads(Path("pyproject.toml").read_text())
+    expected = f"playwright=={PLAYWRIGHT_DRIVER_VERSION}"
+    assert expected in data["project"]["dependencies"]
+    assert expected in data["project"]["optional-dependencies"]["dev"]
