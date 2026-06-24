@@ -101,6 +101,12 @@ def test_timezone_argument_changes_prefs():
     assert ny != rome
 
 
+def test_get_default_stealth_prefs_rejects_auto_timezone():
+    """Pure pref generation cannot resolve proxy/egress-dependent auto TZ."""
+    with pytest.raises(ValueError, match='timezone="auto"'):
+        get_default_stealth_prefs(seed=42, timezone="auto")
+
+
 def test_pin_argument_forces_specific_fields():
     """Pin forces a specific field while the rest stays seed-derived."""
     plain = get_default_stealth_prefs(seed=42)
@@ -156,9 +162,15 @@ def test_build_playwright_launch_config_is_deterministic(tmp_path):
     assert "firefoxUserPrefs" in a["launchOptions"]
 
 
-def test_build_playwright_launch_config_routes_socks_proxy_to_prefs(tmp_path):
+def test_build_playwright_launch_config_routes_socks_proxy_to_prefs(tmp_path, monkeypatch):
+    from invisible_playwright._geo import SessionGeo
+
     fake_binary = tmp_path / "firefox"
     fake_binary.write_text("x")
+    monkeypatch.setattr(
+        "invisible_playwright.config.prepare_session_geo",
+        lambda timezone, proxy_arg: SessionGeo("America/New_York", "203.0.113.7"),
+    )
 
     cfg = build_playwright_launch_config(
         seed=42,
@@ -179,12 +191,99 @@ def test_build_playwright_launch_config_routes_socks_proxy_to_prefs(tmp_path):
     assert prefs["network.proxy.socks_password"] == "p"
 
 
-def test_build_playwright_launch_config_keeps_http_proxy_for_playwright(tmp_path):
+def test_build_playwright_launch_config_keeps_http_proxy_for_playwright(tmp_path, monkeypatch):
+    from invisible_playwright._geo import SessionGeo
+
     fake_binary = tmp_path / "firefox"
     fake_binary.write_text("x")
     proxy = {"server": "http://proxy.example:8080", "username": "u"}
+    monkeypatch.setattr(
+        "invisible_playwright.config.prepare_session_geo",
+        lambda timezone, proxy_arg: SessionGeo("America/New_York", "203.0.113.7"),
+    )
 
     cfg = build_playwright_launch_config(seed=42, binary_path=fake_binary, proxy=proxy)
 
     assert cfg["launchOptions"]["proxy"] is proxy
     assert "network.proxy.socks" not in cfg["launchOptions"]["firefoxUserPrefs"]
+
+
+def test_build_playwright_launch_config_resolves_auto_timezone(tmp_path, monkeypatch):
+    from invisible_playwright._geo import SessionGeo
+
+    fake_binary = tmp_path / "firefox"
+    fake_binary.write_text("x")
+
+    seen = {}
+
+    def fake_prepare(timezone, proxy):
+        seen["timezone"] = timezone
+        seen["proxy"] = proxy
+        return SessionGeo("Europe/Warsaw", None)
+
+    monkeypatch.setattr("invisible_playwright.config.prepare_session_geo", fake_prepare)
+
+    cfg = build_playwright_launch_config(
+        seed=42,
+        locale="auto",
+        timezone="auto",
+        binary_path=fake_binary,
+    )
+
+    assert seen == {"timezone": "auto", "proxy": None}
+    assert cfg["resolvedTimezone"] == "Europe/Warsaw"
+    assert cfg["egressIp"] is None
+    assert cfg["launchOptions"]["env"]["TZ"] == "Europe/Warsaw"
+    assert cfg["contextOptions"]["timezoneId"] == "Europe/Warsaw"
+    assert cfg["contextOptions"]["locale"] == "pl-PL"
+    assert cfg["launchOptions"]["firefoxUserPrefs"]["intl.accept_languages"] == "pl-PL, pl"
+
+
+def test_build_playwright_launch_config_auto_timezone_fallback_omits_auto(tmp_path, monkeypatch):
+    from invisible_playwright._geo import SessionGeo
+
+    fake_binary = tmp_path / "firefox"
+    fake_binary.write_text("x")
+    monkeypatch.setattr(
+        "invisible_playwright.config.prepare_session_geo",
+        lambda timezone, proxy: SessionGeo("", None),
+    )
+
+    cfg = build_playwright_launch_config(
+        seed=42,
+        timezone="auto",
+        binary_path=fake_binary,
+    )
+
+    assert cfg["resolvedTimezone"] == ""
+    assert "env" not in cfg["launchOptions"]
+    assert "timezoneId" not in cfg["contextOptions"]
+    assert "juggler.timezone.override" not in cfg["launchOptions"]["firefoxUserPrefs"]
+
+
+def test_build_playwright_launch_config_proxy_sets_webrtc_egress_env(tmp_path, monkeypatch):
+    from invisible_playwright._geo import SessionGeo
+
+    fake_binary = tmp_path / "firefox"
+    fake_binary.write_text("x")
+    proxy = {"server": "socks5://proxy.example:1080"}
+
+    monkeypatch.setattr(
+        "invisible_playwright.config.prepare_session_geo",
+        lambda timezone, proxy_arg: SessionGeo("America/New_York", "203.0.113.7"),
+    )
+
+    cfg = build_playwright_launch_config(
+        seed=42,
+        locale="auto",
+        proxy=proxy,
+        binary_path=fake_binary,
+    )
+
+    env = cfg["launchOptions"]["env"]
+    assert cfg["resolvedTimezone"] == "America/New_York"
+    assert cfg["egressIp"] == "203.0.113.7"
+    assert env["TZ"] == "EST5EDT"
+    assert env["STEALTHFOX_WEBRTC_PUBLIC_IP"] == "203.0.113.7"
+    assert env["STEALTHFOX_WEBRTC_DISABLE_IPV6"] == "1"
+    assert cfg["contextOptions"]["locale"] == "en-US"

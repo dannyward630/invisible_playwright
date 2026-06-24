@@ -23,7 +23,7 @@ Generate a config:
 python -m invisible_playwright launch-config \
   --seed 42 \
   --locale auto \
-  --timezone America/New_York \
+  --timezone auto \
   --pretty
 ```
 
@@ -52,7 +52,7 @@ const configProcess = spawnSync(
     "--locale",
     "auto",
     "--timezone",
-    "America/New_York",
+    "auto",
   ],
   { encoding: "utf8" },
 );
@@ -102,12 +102,17 @@ Notes:
   operation.
 - On Windows and macOS, `--headless` enables the patched binary's window cloak
   prefs while still launching headed internally.
-- `--locale auto` derives a common regional locale from the provided
-  `--timezone` (for example, `Europe/Warsaw` -> `pl-PL`). If you omit
-  `--timezone`, auto locale falls back to `en-US`. This aligns
-  `navigator.language`, `navigator.languages`, and `Accept-Language`; the
-  current patched Firefox build can still report its bundled runtime default
-  from bare `Intl.*().resolvedOptions().locale`.
+- `--locale auto` derives a common regional locale from the resolved timezone
+  when one is available (for example, `Europe/Warsaw` -> `pl-PL`). With
+  `--timezone auto`, the CLI resolves the session timezone before emitting
+  JSON; if direct no-proxy lookup falls back to the host default, it omits
+  timezone fields rather than emitting the literal string `"auto"`.
+- When proxy arguments are present, the CLI resolves the proxy egress once and
+  includes `STEALTHFOX_WEBRTC_PUBLIC_IP` / `STEALTHFOX_WEBRTC_DISABLE_IPV6` in
+  `launchOptions.env`, matching the Python wrapper's WebRTC behavior.
+- Auto locale aligns `navigator.language`, `navigator.languages`, and
+  `Accept-Language`; the current patched Firefox build can still report its
+  bundled runtime default from bare `Intl.*().resolvedOptions().locale`.
 - SOCKS proxies are written into Firefox prefs. HTTP and HTTPS proxies are
   returned as Playwright `proxy` launch options.
 - For exact reproducibility, pass `--seed`. Without it, each config command

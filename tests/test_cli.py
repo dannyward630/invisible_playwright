@@ -172,6 +172,35 @@ def test_launch_config_subcommand_auto_locale_uses_timezone(tmp_path, capsys):
 
 
 @pytest.mark.unit
+def test_launch_config_subcommand_auto_timezone_resolves(tmp_path, monkeypatch, capsys):
+    from invisible_playwright._geo import SessionGeo
+
+    fake_binary = tmp_path / "firefox"
+    fake_binary.write_text("x")
+
+    monkeypatch.setattr(
+        "invisible_playwright.config.prepare_session_geo",
+        lambda timezone, proxy: SessionGeo("Europe/Zurich", None),
+    )
+
+    rc = cli.main([
+        "launch-config",
+        "--seed", "42",
+        "--locale", "auto",
+        "--timezone", "auto",
+        "--binary-path", str(fake_binary),
+    ])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    data = json.loads(captured.out)
+    assert data["resolvedTimezone"] == "Europe/Zurich"
+    assert data["launchOptions"]["env"]["TZ"] == "Europe/Zurich"
+    assert data["contextOptions"]["timezoneId"] == "Europe/Zurich"
+    assert data["contextOptions"]["locale"] == "de-CH"
+
+
+@pytest.mark.unit
 def test_launch_config_subcommand_accepts_json_overlays(tmp_path, capsys):
     fake_binary = tmp_path / "firefox"
     fake_binary.write_text("x")

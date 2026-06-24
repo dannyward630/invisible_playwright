@@ -41,7 +41,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from ._fpforge import generate_profile
 from ._webgl_personas import forced_gpu_class
-from ._geo import resolve_session_locale
+from ._geo import SessionGeo, prepare_session_geo, resolve_session_locale
 from ._headless import cloak_prefs
 from ._proxy import configure_proxy
 from .constants import BINARY_VERSION, PLAYWRIGHT_DRIVER_VERSION
@@ -92,6 +92,11 @@ def get_default_stealth_prefs(
         Dict ready to pass as ``firefox_user_prefs=`` to
         ``playwright.firefox.launch()`` or ``launch_persistent_context()``.
     """
+    if (timezone or "").strip().lower() == "auto":
+        raise ValueError(
+            'timezone="auto" requires proxy/egress resolution; use '
+            "InvisiblePlaywright or build_playwright_launch_config instead"
+        )
     resolved_seed = int(seed) if seed is not None else secrets.randbits(31)
     resolved_locale = resolve_session_locale(locale, timezone)
     profile = generate_profile(resolved_seed, pin=pin, fixed_gpu_class=forced_gpu_class(resolved_seed))
@@ -139,6 +144,25 @@ def _context_options_for_profile(profile: Any, *, locale: str, timezone: str) ->
     return options
 
 
+def _resolve_launch_geo(timezone: str, proxy: Optional[Dict[str, str]]) -> SessionGeo:
+    """Resolve geo facts for launch-config without surprising no-proxy defaults.
+
+    ``InvisiblePlaywright`` resolves empty timezone from the host egress IP by
+    default. The public JSON helper historically stayed pure/offline when no
+    proxy and no explicit ``timezone`` were provided, so preserve that fast
+    path. Once a proxy is configured, or the caller explicitly asks for
+    ``timezone="auto"``, resolve exactly like the wrapper so Node/TS callers do
+    not get invalid ``timezoneId="auto"`` or a missing WebRTC egress override.
+    """
+    tz = (timezone or "").strip()
+    proxy_set = bool(proxy and (proxy.get("server") or "").strip().lower() != "direct://")
+    if not tz and not proxy_set:
+        return SessionGeo("", None)
+    if tz and tz.lower() != "auto" and not proxy_set:
+        return SessionGeo(tz, None)
+    return prepare_session_geo(tz, proxy)
+
+
 def build_playwright_launch_config(
     seed: Optional[int] = None,
     *,
@@ -163,15 +187,17 @@ def build_playwright_launch_config(
     Linux the caller must provide a virtual display such as ``xvfb-run``; on
     Windows/macOS the patched binary can cloak the headed window.
     """
+    geo = _resolve_launch_geo(timezone, proxy)
+    resolved_timezone = geo.timezone
     resolved_seed = int(seed) if seed is not None else secrets.randbits(31)
-    resolved_locale = resolve_session_locale(locale, timezone)
+    resolved_locale = resolve_session_locale(locale, resolved_timezone)
     profile = generate_profile(
         resolved_seed, pin=pin, fixed_gpu_class=forced_gpu_class(resolved_seed)
     )
     prefs = translate_profile_to_prefs(
         profile,
         locale=resolved_locale,
-        timezone=timezone,
+        timezone=resolved_timezone,
         extra_prefs=extra_prefs,
         virtual_display=bool(headless and sys.platform == "win32"),
     )
@@ -197,8 +223,11 @@ def build_playwright_launch_config(
     if playwright_proxy:
         launch_options["proxy"] = playwright_proxy
     env: Dict[str, str] = {}
-    if timezone:
-        env["TZ"] = _tz_env(timezone)
+    if resolved_timezone:
+        env["TZ"] = _tz_env(resolved_timezone)
+    if geo.egress_ip:
+        env["STEALTHFOX_WEBRTC_PUBLIC_IP"] = geo.egress_ip
+        env["STEALTHFOX_WEBRTC_DISABLE_IPV6"] = "1"
     if env:
         launch_options["env"] = env
 
@@ -206,9 +235,11 @@ def build_playwright_launch_config(
         "seed": resolved_seed,
         "binaryVersion": BINARY_VERSION,
         "playwrightVersion": PLAYWRIGHT_DRIVER_VERSION,
+        "resolvedTimezone": resolved_timezone,
+        "egressIp": geo.egress_ip,
         "launchOptions": launch_options,
         "contextOptions": _context_options_for_profile(
-            profile, locale=resolved_locale, timezone=timezone
+            profile, locale=resolved_locale, timezone=resolved_timezone
         ),
         "requiresVirtualDisplay": bool(headless and sys.platform == "linux"),
     }

@@ -209,6 +209,11 @@ Pass the returned `launchOptions` to `firefox.launch(...)` and
 `contextOptions` to `browser.newContext(...)`. Full example:
 **[docs/typescript.md](docs/typescript.md)**.
 
+`launch-config --timezone auto` resolves the session timezone before printing
+JSON and never emits literal `"auto"` into Playwright options. When proxy
+arguments are provided, the emitted environment also includes the proxy egress
+IP for the patched WebRTC bridge.
+
 ---
 
 ## CLI
