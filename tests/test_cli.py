@@ -150,6 +150,27 @@ def test_launch_config_subcommand_outputs_json(tmp_path, capsys):
 
 
 @pytest.mark.unit
+def test_launch_config_subcommand_auto_locale_uses_timezone(tmp_path, capsys):
+    fake_binary = tmp_path / "firefox"
+    fake_binary.write_text("x")
+
+    rc = cli.main([
+        "launch-config",
+        "--seed", "42",
+        "--locale", "auto",
+        "--timezone", "Europe/Warsaw",
+        "--binary-path", str(fake_binary),
+    ])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    data = json.loads(captured.out)
+    assert data["contextOptions"]["locale"] == "pl-PL"
+    prefs = data["launchOptions"]["firefoxUserPrefs"]
+    assert prefs["intl.accept_languages"] == "pl-PL, pl"
+
+
+@pytest.mark.unit
 def test_launch_config_subcommand_accepts_json_overlays(tmp_path, capsys):
     fake_binary = tmp_path / "firefox"
     fake_binary.write_text("x")

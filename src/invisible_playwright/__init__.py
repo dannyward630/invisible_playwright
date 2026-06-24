@@ -17,7 +17,7 @@ Quickstart:
 """
 from .config import build_playwright_launch_config, get_default_args, get_default_stealth_prefs
 from .constants import BINARY_VERSION, FIREFOX_UPSTREAM_VERSION, PLAYWRIGHT_DRIVER_VERSION
-from ._geo import GeoTimezoneError, resolve_session_timezone
+from ._geo import GeoTimezoneError, resolve_session_locale, resolve_session_timezone
 from .download import ensure_binary, ensure_geoip_mmdb
 from .launcher import InvisiblePlaywright
 
@@ -38,6 +38,7 @@ __all__ = [
     "build_playwright_launch_config",
     "get_default_args",
     "resolve_session_timezone",
+    "resolve_session_locale",
     "GeoTimezoneError",
     "BINARY_VERSION",
     "FIREFOX_UPSTREAM_VERSION",

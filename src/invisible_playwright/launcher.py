@@ -9,7 +9,7 @@ from playwright.sync_api import Browser, BrowserContext, Playwright, sync_playwr
 
 from ._fpforge import Profile, generate_profile
 from ._webgl_personas import forced_gpu_class
-from ._geo import prepare_session_geo
+from ._geo import prepare_session_geo, resolve_session_locale
 from ._headless import cloak_prefs, make_virtual_display
 from ._proxy import configure_proxy as _configure_proxy_shared
 from .download import ensure_binary
@@ -136,7 +136,9 @@ class InvisiblePlaywright:
                 Default ``True`` (~1.5 s max motion). ``False`` disables;
                 a float caps the motion in seconds.
             locale: BCP-47 tag (e.g. ``"en-US"``). Drives the
-                ``Accept-Language`` header and ``navigator.language``.
+                ``Accept-Language`` header and ``navigator.language``. Use
+                ``"auto"`` to derive a common regional locale from the
+                resolved session timezone.
             timezone: IANA zone (e.g. ``"America/New_York"``) — used as-is
                 when set, the only way to force a specific zone. ``""``
                 (default) or ``"auto"`` ALWAYS resolves from the egress IP:
@@ -199,6 +201,7 @@ class InvisiblePlaywright:
         _geo = prepare_session_geo(self._timezone, self._proxy)
         self._timezone = _geo.timezone
         self._webrtc_egress_ip = _geo.egress_ip
+        self._locale = resolve_session_locale(self._locale, self._timezone)
         executable = self._binary_path or ensure_binary()
         prefs = self._build_prefs()
         playwright_proxy = _configure_proxy_shared(self._proxy, prefs)

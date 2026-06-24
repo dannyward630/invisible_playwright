@@ -14,7 +14,7 @@ def main() -> None:
         proxy["username"] = user
         proxy["password"] = password
 
-    with InvisiblePlaywright(proxy=proxy) as browser:
+    with InvisiblePlaywright(proxy=proxy, timezone="auto", locale="auto") as browser:
         page = browser.new_page()
         page.goto("https://httpbin.org/ip")
         print(page.content()[:500])

@@ -118,7 +118,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="emit JSON Playwright launch/context options for Python, Node, or TypeScript callers",
     )
     cfg_p.add_argument("--seed", type=int, help="deterministic fingerprint seed")
-    cfg_p.add_argument("--locale", default="en-US", help="BCP-47 locale, e.g. en-US")
+    cfg_p.add_argument(
+        "--locale",
+        default="en-US",
+        help='BCP-47 locale, e.g. en-US, or "auto" to derive it from --timezone',
+    )
     cfg_p.add_argument("--timezone", default="", help="IANA timezone, e.g. America/New_York")
     cfg_p.add_argument("--headless", action="store_true",
                        help="wrapper-style hidden headed mode; Linux callers must provide Xvfb")

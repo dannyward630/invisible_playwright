@@ -16,7 +16,9 @@ from invisible_playwright._geo import (
     _proxy_is_set,
     discover_egress_ip,
     ip_to_timezone,
+    locale_for_timezone,
     prepare_session_geo,
+    resolve_session_locale,
     resolve_session_timezone,
 )
 
@@ -199,6 +201,37 @@ def test_ip_to_timezone_invalid_iana_raises(monkeypatch):
     _install_fake_maxminddb(monkeypatch, {"location": {"time_zone": "Not/AZone"}})
     with pytest.raises(GeoTimezoneError):
         ip_to_timezone("1.2.3.4", "x.mmdb")
+
+
+# ──────────────────────────────────────────────────────────────────────
+#  locale resolution — opt-in alignment with resolved timezone
+# ──────────────────────────────────────────────────────────────────────
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "timezone,expected",
+    [
+        ("America/New_York", "en-US"),
+        ("Europe/Warsaw", "pl-PL"),
+        ("Europe/Zurich", "de-CH"),
+        ("Asia/Tokyo", "ja-JP"),
+        ("", "en-US"),
+        ("Unknown/Zone", "en-US"),
+    ],
+)
+def test_locale_for_timezone_common_zones(timezone, expected):
+    assert locale_for_timezone(timezone) == expected
+
+
+@pytest.mark.unit
+def test_resolve_session_locale_explicit_wins():
+    assert resolve_session_locale("fr-FR", "Europe/Warsaw") == "fr-FR"
+    assert resolve_session_locale(" en-GB ", "America/New_York") == "en-GB"
+
+
+@pytest.mark.unit
+def test_resolve_session_locale_auto_uses_timezone():
+    assert resolve_session_locale("auto", "Europe/Warsaw") == "pl-PL"
+    assert resolve_session_locale("AUTO", "Europe/Zurich") == "de-CH"
 
 
 # ──────────────────────────────────────────────────────────────────────

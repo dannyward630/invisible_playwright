@@ -152,6 +152,43 @@ def test_persistent_context_kwargs_omits_timezone_when_empty_string():
     assert "timezone_id" not in kw
 
 
+@pytest.mark.unit
+def test_enter_resolves_auto_locale_after_timezone(tmp_path, monkeypatch):
+    """locale='auto' must resolve after timezone='auto' has an egress zone."""
+    from unittest.mock import MagicMock
+    from invisible_playwright._geo import SessionGeo
+
+    monkeypatch.setattr("invisible_playwright.launcher.ensure_binary",
+                       lambda: tmp_path / "firefox")
+    monkeypatch.setattr(
+        "invisible_playwright.launcher.prepare_session_geo",
+        lambda timezone, proxy: SessionGeo("Europe/Warsaw", None),
+    )
+
+    fake_browser = MagicMock(name="browser")
+    original_new_context = MagicMock()
+    fake_browser.new_context = original_new_context
+    fake_browser.new_page = MagicMock()
+    fake_firefox = MagicMock()
+    fake_firefox.launch.return_value = fake_browser
+    fake_playwright = MagicMock()
+    fake_playwright.firefox = fake_firefox
+    fake_pw = MagicMock()
+    fake_pw.start.return_value = fake_playwright
+
+    monkeypatch.setattr("invisible_playwright.launcher.sync_playwright",
+                       lambda: fake_pw)
+
+    obj = InvisiblePlaywright(seed=42, locale="auto", timezone="auto")
+    browser = obj.__enter__()
+    try:
+        browser.new_context()
+        assert original_new_context.call_args.kwargs["locale"] == "pl-PL"
+        assert original_new_context.call_args.kwargs["timezone_id"] == "Europe/Warsaw"
+    finally:
+        obj.__exit__(None, None, None)
+
+
 # ─── Mocked __enter__ flow — confirms the right Playwright call is made ── #
 
 

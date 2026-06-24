@@ -41,6 +41,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from ._fpforge import generate_profile
 from ._webgl_personas import forced_gpu_class
+from ._geo import resolve_session_locale
 from ._headless import cloak_prefs
 from ._proxy import configure_proxy
 from .constants import BINARY_VERSION, PLAYWRIGHT_DRIVER_VERSION
@@ -72,7 +73,8 @@ def get_default_stealth_prefs(
         pin: Optional dict forcing specific fingerprint fields while the
             rest stays seed-derived. See ``docs/pinning.md``.
         locale: BCP-47 tag (e.g. ``"en-US"``). Drives ``Accept-Language``
-            and ``navigator.language``.
+            and ``navigator.language``. Use ``"auto"`` with a concrete
+            ``timezone`` to derive a common regional locale.
         timezone: IANA timezone (e.g. ``"America/New_York"``). Empty means
             use the host TZ. This pure pref builder does NOT resolve
             ``"auto"`` (that needs the proxy + a network lookup at launch
@@ -91,10 +93,11 @@ def get_default_stealth_prefs(
         ``playwright.firefox.launch()`` or ``launch_persistent_context()``.
     """
     resolved_seed = int(seed) if seed is not None else secrets.randbits(31)
+    resolved_locale = resolve_session_locale(locale, timezone)
     profile = generate_profile(resolved_seed, pin=pin, fixed_gpu_class=forced_gpu_class(resolved_seed))
     prefs = translate_profile_to_prefs(
         profile,
-        locale=locale,
+        locale=resolved_locale,
         timezone=timezone,
         extra_prefs=extra_prefs,
         virtual_display=virtual_display,
@@ -154,18 +157,20 @@ def build_playwright_launch_config(
     This is the bridge for TypeScript/JavaScript integrations: callers can use
     the Python sampler once, then pass the returned ``launchOptions`` to
     ``firefox.launch()`` and ``contextOptions`` to ``browser.newContext()``.
-    ``headless=True`` follows the wrapper contract: Firefox still launches in
-    headed mode so the rendering pipeline stays realistic. On Linux the caller
-    must provide a virtual display such as ``xvfb-run``; on Windows/macOS the
-    patched binary can cloak the headed window.
+    ``locale="auto"`` derives a common regional locale from the given
+    ``timezone``. ``headless=True`` follows the wrapper contract: Firefox still
+    launches in headed mode so the rendering pipeline stays realistic. On
+    Linux the caller must provide a virtual display such as ``xvfb-run``; on
+    Windows/macOS the patched binary can cloak the headed window.
     """
     resolved_seed = int(seed) if seed is not None else secrets.randbits(31)
+    resolved_locale = resolve_session_locale(locale, timezone)
     profile = generate_profile(
         resolved_seed, pin=pin, fixed_gpu_class=forced_gpu_class(resolved_seed)
     )
     prefs = translate_profile_to_prefs(
         profile,
-        locale=locale,
+        locale=resolved_locale,
         timezone=timezone,
         extra_prefs=extra_prefs,
         virtual_display=bool(headless and sys.platform == "win32"),
@@ -203,7 +208,7 @@ def build_playwright_launch_config(
         "playwrightVersion": PLAYWRIGHT_DRIVER_VERSION,
         "launchOptions": launch_options,
         "contextOptions": _context_options_for_profile(
-            profile, locale=locale, timezone=timezone
+            profile, locale=resolved_locale, timezone=timezone
         ),
         "requiresVirtualDisplay": bool(headless and sys.platform == "linux"),
     }

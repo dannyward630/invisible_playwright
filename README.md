@@ -155,6 +155,24 @@ with InvisiblePlaywright(proxy=proxy, timezone="America/New_York") as browser:
     ...
 ```
 
+### Locale
+
+The browser locale defaults to `en-US`. For proxy sessions, use
+`locale="auto"` to derive a common regional locale from the resolved timezone,
+keeping `navigator.language`, `navigator.languages`, and `Accept-Language`
+aligned with the egress geography:
+
+```python
+# Polish egress IP -> Europe/Warsaw timezone -> pl-PL locale
+with InvisiblePlaywright(proxy=proxy, timezone="auto", locale="auto") as browser:
+    ...
+```
+
+The current patched Firefox build still reports the bundled browser runtime's
+default locale from bare `Intl.*().resolvedOptions().locale`. Pass an explicit
+locale to individual `Intl` constructors in page code when that distinction
+matters.
+
 ### Pinning specific fingerprint fields
 
 By default everything comes from `seed`. To force specific values while the rest stays seed-derived:

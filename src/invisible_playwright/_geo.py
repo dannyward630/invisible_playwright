@@ -41,6 +41,57 @@ _IP_ECHO_ENDPOINTS = (
 
 _SOCKS_SCHEMES = ("socks5://", "socks4://", "socks://")
 
+_TIMEZONE_LOCALES = {
+    "America/New_York": "en-US",
+    "America/Detroit": "en-US",
+    "America/Indiana/Indianapolis": "en-US",
+    "America/Kentucky/Louisville": "en-US",
+    "America/Chicago": "en-US",
+    "America/Denver": "en-US",
+    "America/Los_Angeles": "en-US",
+    "America/Phoenix": "en-US",
+    "America/Anchorage": "en-US",
+    "Pacific/Honolulu": "en-US",
+    "America/Toronto": "en-CA",
+    "America/Vancouver": "en-CA",
+    "America/Mexico_City": "es-MX",
+    "America/Bogota": "es-CO",
+    "America/Lima": "es-PE",
+    "America/Sao_Paulo": "pt-BR",
+    "America/Argentina/Buenos_Aires": "es-AR",
+    "Europe/London": "en-GB",
+    "Europe/Dublin": "en-IE",
+    "Europe/Paris": "fr-FR",
+    "Europe/Berlin": "de-DE",
+    "Europe/Madrid": "es-ES",
+    "Europe/Rome": "it-IT",
+    "Europe/Amsterdam": "nl-NL",
+    "Europe/Brussels": "fr-BE",
+    "Europe/Zurich": "de-CH",
+    "Europe/Vienna": "de-AT",
+    "Europe/Warsaw": "pl-PL",
+    "Europe/Prague": "cs-CZ",
+    "Europe/Stockholm": "sv-SE",
+    "Europe/Oslo": "nb-NO",
+    "Europe/Copenhagen": "da-DK",
+    "Europe/Helsinki": "fi-FI",
+    "Europe/Athens": "el-GR",
+    "Europe/Istanbul": "tr-TR",
+    "Europe/Moscow": "ru-RU",
+    "Asia/Tokyo": "ja-JP",
+    "Asia/Seoul": "ko-KR",
+    "Asia/Shanghai": "zh-CN",
+    "Asia/Hong_Kong": "zh-HK",
+    "Asia/Taipei": "zh-TW",
+    "Asia/Singapore": "en-SG",
+    "Asia/Kolkata": "en-IN",
+    "Asia/Dubai": "ar-AE",
+    "Australia/Sydney": "en-AU",
+    "Australia/Melbourne": "en-AU",
+    "Pacific/Auckland": "en-NZ",
+    "Africa/Johannesburg": "en-ZA",
+}
+
 
 def _proxy_is_set(proxy: Optional[Dict[str, str]]) -> bool:
     if not proxy:
@@ -134,6 +185,28 @@ def ip_to_timezone(ip: str, mmdb_path: Any) -> str:
             f"geoip returned an invalid IANA zone {tz!r} for {ip}: {exc}"
         ) from exc
     return tz
+
+
+def locale_for_timezone(timezone: str) -> str:
+    """Return a conservative browser locale for a resolved IANA timezone.
+
+    This is intentionally small and boring: it covers common proxy markets and
+    falls back to the language Firefox would otherwise use in this package.
+    """
+    return _TIMEZONE_LOCALES.get((timezone or "").strip(), "en-US")
+
+
+def resolve_session_locale(locale: str, timezone: str) -> str:
+    """Resolve ``locale="auto"`` after timezone resolution.
+
+    Explicit BCP-47 tags are returned unchanged. ``"auto"`` maps the resolved
+    IANA timezone to a common regional locale so ``Accept-Language`` and
+    ``navigator.language`` can stay aligned with the egress geography.
+    """
+    loc = (locale or "").strip()
+    if loc.lower() == "auto":
+        return locale_for_timezone(timezone)
+    return loc
 
 
 class SessionGeo(NamedTuple):

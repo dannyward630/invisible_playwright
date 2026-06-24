@@ -22,7 +22,7 @@ Generate a config:
 ```bash
 python -m invisible_playwright launch-config \
   --seed 42 \
-  --locale en-US \
+  --locale auto \
   --timezone America/New_York \
   --pretty
 ```
@@ -50,7 +50,7 @@ const configProcess = spawnSync(
     "--seed",
     "42",
     "--locale",
-    "en-US",
+    "auto",
     "--timezone",
     "America/New_York",
   ],
@@ -102,6 +102,12 @@ Notes:
   operation.
 - On Windows and macOS, `--headless` enables the patched binary's window cloak
   prefs while still launching headed internally.
+- `--locale auto` derives a common regional locale from the provided
+  `--timezone` (for example, `Europe/Warsaw` -> `pl-PL`). If you omit
+  `--timezone`, auto locale falls back to `en-US`. This aligns
+  `navigator.language`, `navigator.languages`, and `Accept-Language`; the
+  current patched Firefox build can still report its bundled runtime default
+  from bare `Intl.*().resolvedOptions().locale`.
 - SOCKS proxies are written into Firefox prefs. HTTP and HTTPS proxies are
   returned as Playwright `proxy` launch options.
 - For exact reproducibility, pass `--seed`. Without it, each config command
