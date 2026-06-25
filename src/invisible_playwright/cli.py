@@ -173,14 +173,28 @@ def _redacted_headers(headers: dict[str, str]) -> dict[str, str]:
     return redacted
 
 
+def _safe_attr_value(obj: Any, attr: str) -> Any:
+    try:
+        value = getattr(obj, attr)
+        return value() if callable(value) else value
+    except Exception:  # noqa: BLE001 - diagnostics must not break the probe
+        return None
+
+
 def _response_report(response: Any) -> dict[str, Any]:
     headers = getattr(response, "headers", {}) or {}
-    return {
+    report = {
         "url": getattr(response, "url", ""),
         "status": getattr(response, "status", None),
         "ok": bool(getattr(response, "ok", False)),
         "headers": _redacted_headers(headers),
     }
+    request = getattr(response, "request", None)
+    if request is not None:
+        report["requestMethod"] = _safe_attr_value(request, "method")
+        report["resourceType"] = _safe_attr_value(request, "resource_type")
+        report["isNavigationRequest"] = _safe_attr_value(request, "is_navigation_request")
+    return report
 
 
 def _header_value(headers: dict[str, str], name: str) -> str | None:
@@ -231,6 +245,8 @@ def _network_probe_summary(report: dict[str, Any]) -> dict[str, Any]:
             blocked_statuses.append({
                 "url": item.get("url"),
                 "status": status,
+                "requestMethod": item.get("requestMethod"),
+                "resourceType": item.get("resourceType"),
                 "server": _header_value(headers, "server"),
             })
         _append_unique(server_headers, _header_value(headers, "server"))

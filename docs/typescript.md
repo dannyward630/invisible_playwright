@@ -129,10 +129,12 @@ Notes:
   compact JS-visible snapshot (`navigator.webdriver`, languages, user agent,
   timezone, plugins, viewport, screen). The top-level `summary` block condenses
   final status, blocked responses, server/edge headers, cookie names/lengths,
-  extracted TLS/HTTP fingerprint fields, and JS snapshot availability into a
-  pasteable first-pass report. Add `--click-selector` to reproduce a button or
-  form-submit path before collecting the final report. It is useful when a
-  Node/TypeScript integration needs to compare its target-site result against
-  the wrapper's direct browser network behavior.
+  blocked request method/resource type, extracted TLS/HTTP fingerprint fields,
+  and JS snapshot availability into a pasteable first-pass report. The response
+  timeline includes sanitized method/resource/navigation metadata, but never
+  request bodies. Add `--click-selector` to reproduce a button or form-submit
+  path before collecting the final report. It is useful when a Node/TypeScript
+  integration needs to compare its target-site result against the wrapper's
+  direct browser network behavior.
 - For exact reproducibility, pass `--seed`. Without it, each config command
   samples a fresh profile.

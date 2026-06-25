@@ -260,10 +260,11 @@ local, secret-bearing dump.
 
 The report includes a compact `summary` block for sharing in issues: final
 status/URL, blocked `4xx`/`5xx` responses, redirect count, distinct
-`Server`/edge headers, cookie names and lengths, extracted TLS/HTTP fingerprint
-fields, JS snapshot availability, and the launch seed/headless mode. The full
-response timeline and raw JSON body remain in the same output for deeper local
-inspection.
+`Server`/edge headers, blocked request method/resource type, cookie names and
+lengths, extracted TLS/HTTP fingerprint fields, JS snapshot availability, and
+the launch seed/headless mode. The full response timeline includes sanitized
+request method/resource/navigation metadata, while request bodies and cookie
+values stay out of the report unless cookie values are explicitly enabled.
 
 The report also includes a `launch` block (seed, requested headless mode,
 resolved locale/timezone, platform, binary and Playwright versions) and a

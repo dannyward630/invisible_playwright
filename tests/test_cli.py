@@ -8,6 +8,16 @@ import pytest
 from invisible_playwright import cli
 
 
+class _FakeRequest:
+    def __init__(self, method="GET", resource_type="document", navigation=True):
+        self.method = method
+        self.resource_type = resource_type
+        self._navigation = navigation
+
+    def is_navigation_request(self):
+        return self._navigation
+
+
 @pytest.mark.unit
 def test_version_subcommand():
     r = subprocess.run(
@@ -326,6 +336,7 @@ class _FakeResponse:
     status = 200
     ok = True
     url = "https://tls.peet.ws/api/all"
+    request = _FakeRequest()
     headers = {
         "content-type": "application/json",
         "server": "test-edge",
@@ -386,6 +397,7 @@ class _FakePage:
         response.url = "https://example.test/login"
         response.status = 403
         response.ok = False
+        response.request = _FakeRequest("POST", "fetch", False)
         response.headers = {
             "content-type": "text/html",
             "server": "AkamaiGHost",
@@ -488,6 +500,9 @@ def test_network_probe_outputs_browser_network_diagnostics(monkeypatch, capsys):
     assert data["jsSnapshot"]["languages"] == ["pl-PL", "pl"]
     assert data["jsSnapshot"]["pluginsLength"] == 5
     assert data["jsSnapshot"]["timezone"] == "Europe/Warsaw"
+    assert data["responses"][0]["requestMethod"] == "GET"
+    assert data["responses"][0]["resourceType"] == "document"
+    assert data["responses"][0]["isNavigationRequest"] is True
     assert data["responses"][0]["headers"]["set-cookie"] == "[redacted]"
     assert data["responsesTruncated"] is False
     assert data["responsesDropped"] == 0
@@ -641,6 +656,9 @@ def test_network_probe_clicks_selector_and_records_post_click_response(monkeypat
     assert data["responses"][-1]["url"] == "https://example.test/login"
     assert data["responses"][-1]["status"] == 403
     assert data["responses"][-1]["ok"] is False
+    assert data["responses"][-1]["requestMethod"] == "POST"
+    assert data["responses"][-1]["resourceType"] == "fetch"
+    assert data["responses"][-1]["isNavigationRequest"] is False
     assert data["responses"][-1]["headers"]["server"] == "AkamaiGHost"
     assert data["responses"][-1]["headers"]["set-cookie"] == "[redacted]"
     assert data["summary"]["blockedStatusCount"] == 1
@@ -648,6 +666,8 @@ def test_network_probe_clicks_selector_and_records_post_click_response(monkeypat
         {
             "url": "https://example.test/login",
             "status": 403,
+            "requestMethod": "POST",
+            "resourceType": "fetch",
             "server": "AkamaiGHost",
         }
     ]
