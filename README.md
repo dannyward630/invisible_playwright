@@ -258,6 +258,15 @@ Cookie values are redacted by default; the report includes names, domains, and
 value lengths. Use `--include-cookie-values` only when you intentionally want a
 local, secret-bearing dump.
 
+The report also includes a `launch` block (seed, requested headless mode,
+resolved locale/timezone, platform, binary and Playwright versions) and a
+`jsSnapshot` block with common detector-facing values such as
+`navigator.webdriver`, languages, user agent, timezone, plugin count, viewport,
+and screen. That makes it easier to compare headed versus hidden-headed runs
+and to separate JS-surface problems from network-layer blocks. On pages whose
+CSP blocks page evaluation, `jsSnapshot` reports the error and the network
+report is still emitted.
+
 For submit flows, add `--click-selector` and the probe records a bounded
 response timeline after the click. This is useful for cases where a detector
 passes JavaScript checks but the POST is blocked at the edge:

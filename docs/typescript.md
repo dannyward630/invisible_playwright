@@ -125,7 +125,9 @@ Notes:
 - `python -m invisible_playwright network-probe` launches the same patched
   Firefox path and emits browser-side status, final URL, TLS/HTTP fingerprint
   JSON when the response body is JSON, cookie metadata, and a bounded response
-  timeline with `Set-Cookie` redacted. Add `--click-selector` to reproduce a
+  timeline with `Set-Cookie` redacted. It also includes launch metadata and a
+  compact JS-visible snapshot (`navigator.webdriver`, languages, user agent,
+  timezone, plugins, viewport, screen). Add `--click-selector` to reproduce a
   button or form-submit path before collecting the final report. It is useful
   when a Node/TypeScript integration needs to compare its target-site result
   against the wrapper's direct browser network behavior.

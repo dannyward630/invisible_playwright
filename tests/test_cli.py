@@ -404,12 +404,40 @@ class _FakePage:
         assert selector == "body"
         return _FakeLocator('{"tls": {"ja4": "t13d1617h2"}, "http2": {"akamai_fingerprint": "x"}}')
 
+    def evaluate(self, script):
+        assert "navigator.webdriver" in script
+        return {
+            "userAgent": "Mozilla/5.0 Firefox/150.0.1",
+            "webdriver": False,
+            "languages": ["pl-PL", "pl"],
+            "language": "pl-PL",
+            "platform": "Win32",
+            "hardwareConcurrency": 8,
+            "deviceMemory": None,
+            "pluginsLength": 5,
+            "mimeTypesLength": 2,
+            "timezone": "Europe/Warsaw",
+            "viewport": {"width": 1280, "height": 720},
+            "screen": {
+                "width": 1920,
+                "height": 1080,
+                "availWidth": 1920,
+                "availHeight": 1040,
+                "colorDepth": 24,
+                "pixelDepth": 24,
+            },
+            "devicePixelRatio": 1,
+        }
+
 
 class _FakeInvisiblePlaywright:
     instances = []
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs
+        self.seed = kwargs.get("seed") if kwargs.get("seed") is not None else 12345
+        self._locale = kwargs.get("locale", "en-US")
+        self._timezone = kwargs.get("timezone", "")
         self.page = _FakePage()
         self.instances.append(self)
 
@@ -450,6 +478,16 @@ def test_network_probe_outputs_browser_network_diagnostics(monkeypatch, capsys):
     assert data["headers"]["set-cookie"] == "[redacted]"
     assert data["proxyConfigured"] is True
     assert data["bodyJson"]["tls"]["ja4"] == "t13d1617h2"
+    assert data["launch"]["seed"] == 42
+    assert data["launch"]["headlessRequested"] is False
+    assert data["launch"]["headlessMode"] == "headed"
+    assert data["launch"]["locale"] == "auto"
+    assert data["launch"]["timezone"] == "Europe/Warsaw"
+    assert data["launch"]["binaryVersion"].startswith("firefox-")
+    assert data["jsSnapshot"]["webdriver"] is False
+    assert data["jsSnapshot"]["languages"] == ["pl-PL", "pl"]
+    assert data["jsSnapshot"]["pluginsLength"] == 5
+    assert data["jsSnapshot"]["timezone"] == "Europe/Warsaw"
     assert data["responses"][0]["headers"]["set-cookie"] == "[redacted]"
     assert data["responsesTruncated"] is False
     assert data["responsesDropped"] == 0
@@ -505,6 +543,17 @@ class _FakeTextBrowser(_FakeInvisiblePlaywright):
         self.page = _FakeTextPage()
 
 
+class _FakeCspPage(_FakePage):
+    def evaluate(self, script):
+        raise RuntimeError("call to eval() blocked by CSP")
+
+
+class _FakeCspBrowser(_FakeInvisiblePlaywright):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.page = _FakeCspPage()
+
+
 @pytest.mark.unit
 def test_network_probe_reports_text_body_sample(monkeypatch, capsys):
     _FakeTextBrowser.instances = []
@@ -521,6 +570,36 @@ def test_network_probe_reports_text_body_sample(monkeypatch, capsys):
     data = json.loads(captured.out)
     assert data["bodyTextSample"] == "Forb"
     assert "bodyJson" not in data
+
+
+@pytest.mark.unit
+def test_network_probe_keeps_report_when_js_snapshot_is_blocked(monkeypatch, capsys):
+    _FakeCspBrowser.instances = []
+    monkeypatch.setattr(cli, "InvisiblePlaywright", _FakeCspBrowser)
+
+    rc = cli.main(["network-probe"])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    data = json.loads(captured.out)
+    assert data["status"] == 200
+    assert "blocked by CSP" in data["jsSnapshot"]["error"]
+    assert data["bodyJson"]["tls"]["ja4"] == "t13d1617h2"
+
+
+@pytest.mark.unit
+def test_network_probe_launch_metadata_marks_hidden_headed(monkeypatch, capsys):
+    _FakeInvisiblePlaywright.instances = []
+    monkeypatch.setattr(cli, "InvisiblePlaywright", _FakeInvisiblePlaywright)
+
+    rc = cli.main(["network-probe", "--headless"])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    data = json.loads(captured.out)
+    assert data["launch"]["headlessRequested"] is True
+    assert data["launch"]["headlessMode"] == "hidden-headed"
+    assert _FakeInvisiblePlaywright.instances[0].kwargs["headless"] is True
 
 
 @pytest.mark.unit

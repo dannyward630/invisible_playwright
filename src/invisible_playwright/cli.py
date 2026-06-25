@@ -183,17 +183,48 @@ def _response_report(response: Any) -> dict[str, Any]:
     }
 
 
+def _js_snapshot(page: Any) -> dict[str, Any]:
+    try:
+        return page.evaluate(
+            """() => ({
+                userAgent: navigator.userAgent,
+                webdriver: navigator.webdriver,
+                languages: Array.from(navigator.languages || []),
+                language: navigator.language,
+                platform: navigator.platform,
+                hardwareConcurrency: navigator.hardwareConcurrency,
+                deviceMemory: navigator.deviceMemory ?? null,
+                pluginsLength: navigator.plugins ? navigator.plugins.length : null,
+                mimeTypesLength: navigator.mimeTypes ? navigator.mimeTypes.length : null,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                viewport: { width: innerWidth, height: innerHeight },
+                screen: {
+                    width: screen.width,
+                    height: screen.height,
+                    availWidth: screen.availWidth,
+                    availHeight: screen.availHeight,
+                    colorDepth: screen.colorDepth,
+                    pixelDepth: screen.pixelDepth
+                },
+                devicePixelRatio
+            })"""
+        )
+    except Exception as exc:  # noqa: BLE001 - diagnostics must preserve network report
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
 def _cmd_network_probe(args: argparse.Namespace) -> int:
     proxy = _proxy_from_args(args)
     try:
-        with InvisiblePlaywright(
+        runner = InvisiblePlaywright(
             seed=args.seed,
             locale=args.locale,
             timezone=args.timezone,
             headless=args.headless,
             proxy=proxy,
             binary_path=args.binary_path,
-        ) as browser:
+        )
+        with runner as browser:
             page = browser.new_page()
             responses: list[dict[str, Any]] = []
             responses_dropped = 0
@@ -231,6 +262,7 @@ def _cmd_network_probe(args: argparse.Namespace) -> int:
                 _cookie_report(cookie, include_values=args.include_cookie_values)
                 for cookie in page.context.cookies()
             ]
+            js_snapshot = _js_snapshot(page)
             report: dict[str, Any] = {
                 "url": args.url,
                 "finalUrl": page.url,
@@ -239,6 +271,19 @@ def _cmd_network_probe(args: argparse.Namespace) -> int:
                 "contentType": content_type,
                 "headers": _redacted_headers(headers),
                 "title": title,
+                "launch": {
+                    "seed": runner.seed,
+                    "headlessRequested": args.headless,
+                    "headlessMode": "hidden-headed" if args.headless else "headed",
+                    "locale": runner._locale,
+                    "timezone": runner._timezone,
+                    "platform": sys.platform,
+                    "machine": platform.machine(),
+                    "binaryVersion": BINARY_VERSION,
+                    "firefoxVersion": FIREFOX_UPSTREAM_VERSION,
+                    "playwrightVersion": PLAYWRIGHT_DRIVER_VERSION,
+                },
+                "jsSnapshot": js_snapshot,
                 "proxyConfigured": proxy_is_set(proxy),
                 "cookieCount": len(cookies),
                 "cookies": cookies,
