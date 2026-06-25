@@ -127,9 +127,12 @@ Notes:
   JSON when the response body is JSON, cookie metadata, and a bounded response
   timeline with `Set-Cookie` redacted. It also includes launch metadata and a
   compact JS-visible snapshot (`navigator.webdriver`, languages, user agent,
-  timezone, plugins, viewport, screen). Add `--click-selector` to reproduce a
-  button or form-submit path before collecting the final report. It is useful
-  when a Node/TypeScript integration needs to compare its target-site result
-  against the wrapper's direct browser network behavior.
+  timezone, plugins, viewport, screen). The top-level `summary` block condenses
+  final status, blocked responses, server/edge headers, cookie names/lengths,
+  extracted TLS/HTTP fingerprint fields, and JS snapshot availability into a
+  pasteable first-pass report. Add `--click-selector` to reproduce a button or
+  form-submit path before collecting the final report. It is useful when a
+  Node/TypeScript integration needs to compare its target-site result against
+  the wrapper's direct browser network behavior.
 - For exact reproducibility, pass `--seed`. Without it, each config command
   samples a fresh profile.

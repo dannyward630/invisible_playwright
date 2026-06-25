@@ -183,6 +183,119 @@ def _response_report(response: Any) -> dict[str, Any]:
     }
 
 
+def _header_value(headers: dict[str, str], name: str) -> str | None:
+    wanted = name.lower()
+    for key, value in headers.items():
+        if key.lower() == wanted:
+            return value
+    return None
+
+
+def _append_unique(values: list[str], value: str | None) -> None:
+    if value and value not in values:
+        values.append(value)
+
+
+def _copy_fingerprint_fields(
+    output: dict[str, Any],
+    source: Any,
+    keys: tuple[str, ...],
+) -> None:
+    if not isinstance(source, dict):
+        return
+    for key in keys:
+        value = source.get(key)
+        if value is not None:
+            output[key] = value
+
+
+def _network_probe_summary(report: dict[str, Any]) -> dict[str, Any]:
+    responses = report.get("responses")
+    if not isinstance(responses, list):
+        responses = []
+
+    blocked_statuses: list[dict[str, Any]] = []
+    redirect_count = 0
+    server_headers: list[str] = []
+    edge_headers: list[str] = []
+    for item in responses:
+        if not isinstance(item, dict):
+            continue
+        headers = item.get("headers")
+        if not isinstance(headers, dict):
+            headers = {}
+        status = item.get("status")
+        if isinstance(status, int) and 300 <= status < 400:
+            redirect_count += 1
+        if isinstance(status, int) and status >= 400:
+            blocked_statuses.append({
+                "url": item.get("url"),
+                "status": status,
+                "server": _header_value(headers, "server"),
+            })
+        _append_unique(server_headers, _header_value(headers, "server"))
+        _append_unique(edge_headers, _header_value(headers, "x-cache"))
+        _append_unique(edge_headers, _header_value(headers, "x-served-by"))
+        _append_unique(edge_headers, _header_value(headers, "cf-ray"))
+        _append_unique(edge_headers, _header_value(headers, "akamai-request-bc"))
+
+    cookies = report.get("cookies")
+    if not isinstance(cookies, list):
+        cookies = []
+    cookie_summary = [
+        {
+            "name": cookie.get("name"),
+            "domain": cookie.get("domain"),
+            "valueLength": cookie.get("valueLength"),
+        }
+        for cookie in cookies
+        if isinstance(cookie, dict)
+    ]
+
+    body_json = report.get("bodyJson")
+    tls = body_json.get("tls") if isinstance(body_json, dict) else None
+    http2 = body_json.get("http2") if isinstance(body_json, dict) else None
+    fingerprint: dict[str, Any] = {}
+    _copy_fingerprint_fields(
+        fingerprint,
+        tls,
+        ("ja3", "ja3_hash", "ja4", "peetprint", "peetprint_hash"),
+    )
+    _copy_fingerprint_fields(
+        fingerprint,
+        http2,
+        ("akamai_fingerprint", "akamai_fingerprint_hash"),
+    )
+
+    js_snapshot = report.get("jsSnapshot")
+    if not isinstance(js_snapshot, dict):
+        js_snapshot = {}
+    launch = report.get("launch")
+    if not isinstance(launch, dict):
+        launch = {}
+
+    return {
+        "finalStatus": report.get("status"),
+        "finalUrl": report.get("finalUrl"),
+        "blockedStatusCount": len(blocked_statuses),
+        "blockedStatuses": blocked_statuses,
+        "redirectCount": redirect_count,
+        "serverHeaders": server_headers,
+        "edgeHeaders": edge_headers,
+        "cookieNames": [item["name"] for item in cookie_summary if item.get("name")],
+        "cookieSummary": cookie_summary,
+        "tlsHttpFingerprint": fingerprint,
+        "jsSnapshotAvailable": bool(js_snapshot) and "error" not in js_snapshot,
+        "jsSnapshotError": js_snapshot.get("error"),
+        "webdriver": js_snapshot.get("webdriver"),
+        "languages": js_snapshot.get("languages"),
+        "headlessMode": launch.get("headlessMode"),
+        "seed": launch.get("seed"),
+        "responsesTruncated": report.get("responsesTruncated"),
+        "responsesDropped": report.get("responsesDropped"),
+    }
+
+
 def _js_snapshot(page: Any) -> dict[str, Any]:
     try:
         return page.evaluate(
@@ -297,6 +410,7 @@ def _cmd_network_probe(args: argparse.Namespace) -> int:
                 report["bodyJson"] = body_json
             else:
                 report["bodyTextSample"] = body_text[: args.body_sample_chars]
+            report["summary"] = _network_probe_summary(report)
     except Exception as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

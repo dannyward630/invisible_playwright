@@ -258,6 +258,13 @@ Cookie values are redacted by default; the report includes names, domains, and
 value lengths. Use `--include-cookie-values` only when you intentionally want a
 local, secret-bearing dump.
 
+The report includes a compact `summary` block for sharing in issues: final
+status/URL, blocked `4xx`/`5xx` responses, redirect count, distinct
+`Server`/edge headers, cookie names and lengths, extracted TLS/HTTP fingerprint
+fields, JS snapshot availability, and the launch seed/headless mode. The full
+response timeline and raw JSON body remain in the same output for deeper local
+inspection.
+
 The report also includes a `launch` block (seed, requested headless mode,
 resolved locale/timezone, platform, binary and Playwright versions) and a
 `jsSnapshot` block with common detector-facing values such as

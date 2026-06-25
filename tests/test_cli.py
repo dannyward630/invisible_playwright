@@ -495,6 +495,24 @@ def test_network_probe_outputs_browser_network_diagnostics(monkeypatch, capsys):
     assert data["cookies"][0]["name"] == "_abck"
     assert data["cookies"][0]["valueLength"] == 6
     assert "value" not in data["cookies"][0]
+    assert data["summary"]["finalStatus"] == 200
+    assert data["summary"]["finalUrl"] == "https://tls.peet.ws/api/all"
+    assert data["summary"]["blockedStatusCount"] == 0
+    assert data["summary"]["serverHeaders"] == ["test-edge"]
+    assert data["summary"]["cookieNames"] == ["_abck"]
+    assert data["summary"]["cookieSummary"] == [
+        {"name": "_abck", "domain": ".example.test", "valueLength": 6}
+    ]
+    assert data["summary"]["tlsHttpFingerprint"] == {
+        "ja4": "t13d1617h2",
+        "akamai_fingerprint": "x",
+    }
+    assert data["summary"]["jsSnapshotAvailable"] is True
+    assert data["summary"]["jsSnapshotError"] is None
+    assert data["summary"]["webdriver"] is False
+    assert data["summary"]["languages"] == ["pl-PL", "pl"]
+    assert data["summary"]["headlessMode"] == "headed"
+    assert data["summary"]["seed"] == 42
     instance = _FakeInvisiblePlaywright.instances[0]
     assert instance.kwargs["seed"] == 42
     assert instance.kwargs["locale"] == "auto"
@@ -585,6 +603,8 @@ def test_network_probe_keeps_report_when_js_snapshot_is_blocked(monkeypatch, cap
     assert data["status"] == 200
     assert "blocked by CSP" in data["jsSnapshot"]["error"]
     assert data["bodyJson"]["tls"]["ja4"] == "t13d1617h2"
+    assert data["summary"]["jsSnapshotAvailable"] is False
+    assert "blocked by CSP" in data["summary"]["jsSnapshotError"]
 
 
 @pytest.mark.unit
@@ -623,6 +643,15 @@ def test_network_probe_clicks_selector_and_records_post_click_response(monkeypat
     assert data["responses"][-1]["ok"] is False
     assert data["responses"][-1]["headers"]["server"] == "AkamaiGHost"
     assert data["responses"][-1]["headers"]["set-cookie"] == "[redacted]"
+    assert data["summary"]["blockedStatusCount"] == 1
+    assert data["summary"]["blockedStatuses"] == [
+        {
+            "url": "https://example.test/login",
+            "status": 403,
+            "server": "AkamaiGHost",
+        }
+    ]
+    assert data["summary"]["serverHeaders"] == ["test-edge", "AkamaiGHost"]
     page = _FakeInvisiblePlaywright.instances[0].page
     assert page.clicks == [("input[name=btnSubmit]", 45000)]
     assert page.waits == [500]
@@ -645,6 +674,9 @@ def test_network_probe_response_log_respects_limit(monkeypatch, capsys):
     assert len(data["responses"]) == 1
     assert data["responsesTruncated"] is True
     assert data["responsesDropped"] == 1
+    assert data["summary"]["responsesTruncated"] is True
+    assert data["summary"]["responsesDropped"] == 1
+    assert data["summary"]["blockedStatusCount"] == 0
 
 
 class _FailingInvisiblePlaywright:
